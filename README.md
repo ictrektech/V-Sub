@@ -458,3 +458,7 @@ For frontend/main-process-only updates, `docker/build_image.sh --sheet <sheet> -
 Run `scripts/publish-modelhub-models.py --keys <protected-json> --work-dir ~/dev/build/v-sub/modelscope` on a build host to publish missing catalog packages. The protected JSON contains `modelscope` and optional `hf` tokens; do not place it in the repository. The publisher verifies anonymous access and required remote file sizes. Original model licensing and attribution apply.
 
 Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/export` read-only, rather than the restricted storage root. A completed model with inaccessible or missing files is reported as a mount/permission error and never triggers a full forced re-download. Existing downloaded weights are reused after updating the package.
+
+### V-Router 主动发现本地模型
+
+`GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Router 优先使用这一发现快照，兼容旧版 V-Sub 主动注册但消除重复条目。未部署新版 V-Router 时原有注册仍可使用。

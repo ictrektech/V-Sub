@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { discoverLocalModels } from './discovery.mjs';
 import fs from 'node:fs';
 import { mkdir, readFile, stat, chown, chmod, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -88,6 +89,15 @@ const server = http.createServer(async (req, res) => {
     let pathname = url.pathname;
     if (pathname === base || pathname.startsWith(base + '/')) pathname = pathname.slice(base.length) || '/';
     if (pathname === '/health') { json(res, 200, { ok: true, version: process.env.APP_VERSION || 'development', workers: workers.size }); return; }
+    if (pathname === '/api/v1/discovery' && req.method === 'GET') {
+      const match = /^Bearer (.+)$/i.exec(req.headers.authorization || '');
+      if (!match) { json(res, 401, { error: 'VOS access token required' }); return; }
+      let user;
+      try { user = await verified(match[1]); } catch { json(res, 401, { error: 'Invalid VOS access token' }); return; }
+      try { json(res, 200, await discoverLocalModels(user, workers.get(user.namespace))); }
+      catch { json(res, 503, { error: 'Local model discovery unavailable' }); }
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD' && !sameOrigin(req)) { json(res, 403, { error: 'Invalid request origin' }); return; }
     if (pathname === '/api/auth/pkce' && req.method === 'GET') { const verifier = randomBytes(32).toString('base64url'); json(res, 200, { verifier, state: randomBytes(32).toString('base64url'), nonce: randomBytes(32).toString('base64url'), challenge: createHash('sha256').update(verifier).digest('base64url') }); return; }
     if (pathname === '/api/auth/vos-oidc' && req.method === 'POST') {
