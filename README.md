@@ -462,3 +462,5 @@ Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/expo
 ### V-Router 主动发现本地模型
 
 `GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Router 优先使用这一发现快照，兼容旧版 V-Sub 主动注册但消除重复条目。未部署新版 V-Router 时原有注册仍可使用。
+
+VOS 发布标签 `vos-v-sub-v*` 仅触发 VOS 打包流程，桌面构建流程排除 `vos-*` 标签。
