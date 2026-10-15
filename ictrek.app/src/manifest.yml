@@ -13,7 +13,7 @@ frontend: {enabled: true, basePath: /app/com.ictrek.v-sub}
 platform: {version: ">=3.0.0"}
 dependencies:
   apps:
-    - {id: com.ictrek.v-router, version: ">=0.0.40", optional: false}
+    - {id: com.ictrek.v-scheduler, version: latest, optional: false}
 oauth2:
   client:
     id: com.ictrek.v-sub

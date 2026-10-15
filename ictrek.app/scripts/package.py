@@ -11,6 +11,9 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+import yaml
+from resolve_dependencies import resolve_dependencies
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -116,6 +119,15 @@ def render(version: str, images: dict[str, str], stage: Path) -> None:
         raise RuntimeError("unrendered image variable remains")
 
 
+def resolve_manifest(stage: Path) -> None:
+    manifest_path = stage / "manifest.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    resolved = resolve_dependencies(manifest, {"com.ictrek.v-scheduler": "ictrektech/V-Scheduler"})
+    manifest_path.write_text(yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False))
+    for dependency in resolved:
+        print(f"Dependency resolved: {dependency['id']} published={dependency['published']} package={dependency['requirement']}")
+
+
 def package(version: str, stage: Path) -> Path:
     DIST.mkdir(exist_ok=True)
     app_tar = DIST / "app.tar.gz"
@@ -180,6 +192,7 @@ def main() -> None:
     if stage.exists():
         shutil.rmtree(stage)
     render(version, images, stage)
+    resolve_manifest(stage)
     output = package(version, stage)
     print(output)
 

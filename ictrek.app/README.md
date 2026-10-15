@@ -1,6 +1,6 @@
 # V-Sub VOS delivery
 
-App ID: `com.ictrek.v-sub`. Browser prefix: `/app/com.ictrek.v-sub/`. Backend: `v-sub-backend:7090`, host port `22703`. V-Router is required.
+App ID: `com.ictrek.v-sub`. Browser prefix: `/app/com.ictrek.v-sub/`. Backend: `v-sub-backend:7090`, host port `22703`. The unified V-Scheduler application supplies the required model gateway. Existing `v-router` DNS and API aliases remain compatible. Packaging resolves the Scheduler dependency from its current published Release or App Store record and stops if verification fails.
 
 The application preserves the upstream Next.js renderer and Electron background engine. A browser preload transport replaces IPC, file dialogs and the media protocol. Each verified OIDC subject owns a separate background process, storage directory and unprivileged OS UID. V-Router credentials and VOS access tokens never persist in app settings. The original assistant remains available; Electron window screenshot capture is unavailable in the browser transport. Installed native models register as private V-Router services; native engines execute the same code as desktop tasks.
 
