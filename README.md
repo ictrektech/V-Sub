@@ -461,6 +461,8 @@ Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/expo
 
 ### V-Router 主动发现本地模型
 
-`GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Router 优先使用这一发现快照，兼容旧版 V-Sub 主动注册但消除重复条目。未部署新版 V-Router 时原有注册仍可使用。
+`GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Router 使用这一发现快照。V-Sub 不再向 V-Router 主动注册、续期或注销模型；后台仅每 30 秒刷新自身模型目录，且不依赖 V-Router 登录状态。
 
 VOS 发布标签 `vos-v-sub-v*` 仅触发 VOS 打包流程，桌面构建流程排除 `vos-*` 标签。
+
+仅修改主进程服务逻辑时可用 `docker/build_image.sh --sheet <sheet> --backend-only`，通过 `WORKBENCH_IMAGE` 选择同架构已发布工作台、`BASE_IMAGE` 选择目标 profile 的已发布运行时，检查 TypeScript 并重新编译主进程，不重建 Next 前端或本地模型运行时。

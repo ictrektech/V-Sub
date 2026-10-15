@@ -13,17 +13,15 @@ import { getInstalledTtsModels, TTS_MODELS, getTtsModelRequest, resolveTtsVoiceS
 import { getSherpaTtsRuntime } from '../helpers/sherpaOnnx/ttsRuntime';
 import { getClonedVoices } from '../helpers/voiceClone/voiceCloneManager';
 import { previewVoice } from '../helpers/dubbing/dubbingProcessor';
-import { routerBase, routerHeaders } from './router';
 
 type LocalModel = { id: string; kind: 'asr' | 'tts'; engine?: any; model: string; endpoints: string[]; capabilities: string[] };
 let models: LocalModel[] = [];
 let busy = false;
-let registrationError = '';
-export function localRegistrationStatus() { return { models: models.length, error: registrationError }; }
+let refreshError = '';
+export function localModelStatus() { return { models: models.length, error: refreshError }; }
 let queue: Promise<any> = Promise.resolve();
 const root = process.env.VSUB_USER_ROOT!;
 const prefix = `v-sub-${(process.env.VSUB_NAMESPACE || 'desktop').slice(0, 12)}`;
-const serviceId = `${prefix}-local`;
 function voicesFor(model: string) { const spec = TTS_MODELS[model]; return spec.cloneOnly ? getClonedVoices().filter(v => v.engine === 'zipvoice' && v.refText && v.refWavPath && fs.existsSync(v.refWavPath)).map(v => ({ id: v.id, sid: 0, labelEn: v.name })) : spec.voices; }
 export async function refreshLocalModels() {
   const event = createServiceEvent();
@@ -43,17 +41,9 @@ export async function refreshLocalModels() {
     next.push({ id: `${prefix}/tts/${model}`, model, kind: 'tts', endpoints: ['audio/speech'], capabilities: ['tts'] });
   }
   models = next;
-  if (!next.length) {
-    await fetch(`${routerBase}/api/v1/registrations/registered-${serviceId}`, { method: 'DELETE', headers: routerHeaders(), signal: AbortSignal.timeout(8000) }); return;
-  }
-  const result = await fetch(`${routerBase}/api/v1/registrations`, {
-    method: 'POST', headers: { ...routerHeaders(), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8000),
-    body: JSON.stringify({ service_id: serviceId, name: 'V-Sub local models', visibility: 'private', base_url: `${process.env.VSUB_INFERENCE_BASE_URL || 'http://v-sub-backend:7090'}/inference/${process.env.VSUB_NAMESPACE}/v1`, protocol: 'openai', api_key: process.env.VSUB_WORKER_TOKEN, models: next.map(m => ({ id: m.id, model_kind: 'unknown', capabilities: m.capabilities, endpoints: m.endpoints })), model_endpoints: Object.fromEntries(next.map(m => [m.id, m.endpoints])), model_capabilities: Object.fromEntries(next.map(m => [m.id, m.capabilities])), ttl_seconds: 90 }),
-  });
-  if (!result.ok) { const response: any = await result.json().catch(() => ({})); throw new Error(`Local model registration HTTP ${result.status}: ${response.error?.message || 'rejected'}`); }
-}
-export function startLocalRegistration() {
-  const tick = async () => { if (busy || !routerHeaders().Authorization.replace('Bearer ', '')) return; busy = true; try { await refreshLocalModels(); registrationError = ''; } catch (e) { registrationError = e instanceof Error ? e.message : String(e); } finally { busy = false; } };
+ }
+export function startLocalModelRefresh() {
+  const tick = async () => { if (busy) return; busy = true; try { await refreshLocalModels(); refreshError = ''; } catch (e) { refreshError = e instanceof Error ? e.message : String(e); } finally { busy = false; } };
   void tick(); setInterval(tick, 30000).unref();
 }
 export async function handleLocalInference(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {

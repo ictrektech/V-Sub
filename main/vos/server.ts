@@ -8,7 +8,7 @@ import { app, dialog, shell } from 'electron';
 import { invokeHandler, sendHandler } from '../automation/handlers';
 import { automationEvents, createServiceEvent } from '../automation/events';
 import { refreshRouter, routerStatus } from './router';
-import { startLocalRegistration, handleLocalInference, localRegistrationStatus } from './localModels';
+import { startLocalModelRefresh, handleLocalInference, localModelStatus } from './localModels';
 
 const contexts = new AsyncLocalStorage<{ saved: string[] }>();
 const clients = new Set<http.ServerResponse>();
@@ -77,7 +77,7 @@ export async function startWebServer() {
       if (typeof channel !== 'string' || !Array.isArray(args)) throw new Error('Invalid IPC request');
       if (channel === 'sync-title-bar-overlay' || channel === 'window-chrome:getState') { reply(200, { result: null }); return; }
       // Browser operations reuse the exact desktop handlers. OS UID and data roots isolate native IO.
-      if (channel === 'vos:router-status') { reply(200, { result: { ...routerStatus(), local: localRegistrationStatus() } }); return; }
+      if (channel === 'vos:router-status') { reply(200, { result: { ...routerStatus(), local: localModelStatus() } }); return; }
       if (channel === 'vos:runtime-status') { reply(200, { result: { profile: process.env.VSUB_PROFILE || 'cpu', sherpaProvider: process.env.VSUB_SHERPA_PROVIDER || 'cpu', sherpaVersion: process.env.VSUB_SHERPA_VERSION || '1.13.2' } }); return; }
       const deletion: Record<string, string> = { deleteModel: 'ggml', deleteCt2Model: 'ct2', deleteFunasrModel: 'funasr', deleteQwenModel: 'qwen', deleteFireRedModel: 'firered', deleteParakeetModel: 'parakeet', deleteTtsModel: 'tts', deleteSpeakerDiarizationModel: 'diarization' };
       if (deletion[channel]) detachHubModel(deletion[channel], channel === 'deleteSpeakerDiarizationModel' ? 'default' : String(args[0]).toLowerCase());
@@ -93,6 +93,6 @@ export async function startWebServer() {
   await syncHubModels().catch(() => {});
   const hubTimer = setInterval(() => { void syncHubModels().catch(() => {}); }, 15000);
   hubTimer.unref();
-  startLocalRegistration();
+  startLocalModelRefresh();
   app.once('will-quit', () => server.close());
 }
