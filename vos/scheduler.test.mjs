@@ -13,9 +13,10 @@ async function fixture(context) {
   const calls = [];
   const settings = { profile: 'l4t', runtime: { threads: 4, provider: 'cpu' } };
   const upstream = `http://v-sub-backend:7090/inference/${namespace}/v1`;
-  const config = { protocol_version: 1, binding_revision: 2, app_id: 'com.ictrek.v-sub', url: 'http://v-router:8080/scheduler/api/v1', token: 'scheduler-service-'.repeat(4), models: { [model]: 'app.model' }, gateway_executors: { [model]: 'gateway.model' }, namespaces: { [model]: namespace }, upstreams: { [model]: upstream }, model_limits: { [model]: { input_bytes: 1024, duration_seconds: 60 } }, model_execution_settings: { [model]: settings } };
+  const worker = { port: 19001, token: 'inference-token', schedulerToken: workerToken, generation: 'c'.repeat(32) };
+  const config = { protocol_version: 1, binding_revision: 2, app_id: 'com.ictrek.v-sub', url: 'http://v-router:8080/scheduler/api/v1', token: 'scheduler-service-'.repeat(4), models: { [model]: 'app.model' }, gateway_executors: { [model]: 'gateway.model' }, namespaces: { [model]: namespace }, model_generations: { [model]: worker.generation }, upstreams: { [model]: upstream }, model_limits: { [model]: { input_bytes: 1024, duration_seconds: 60 } }, model_execution_settings: { [model]: settings } };
   const broker = new SchedulerBroker({ dataRoot: directory,
-    workerForNamespace: async value => value === namespace ? { port: 19001, token: 'inference-token', schedulerToken: workerToken } : value === other ? { port: 19002, schedulerToken: otherToken } : null,
+    workerForNamespace: async value => value === namespace ? worker : value === other ? { port: 19002, schedulerToken: otherToken } : null,
     fetcher: async (url, options = {}) => {
       if (url.startsWith('http://127.0.0.1:19001/')) return Response.json({ data: [{ id: model }] });
       const endpoint = new URL(url).pathname.replace('/scheduler/api/v1', '');
@@ -31,7 +32,7 @@ async function fixture(context) {
   context.after(async () => { for (const execution of broker.executions.values()) clearInterval(execution.timer); await fs.rm(directory, { recursive: true, force: true }); });
   await broker.bind(config);
   calls.length = 0;
-  return { broker, config, calls, namespace, other, workerToken, otherToken, model, settings, body: { model, execution_settings: settings, inputs: { input_bytes: 100, duration_seconds: 1 } } };
+  return { broker, config, calls, worker, namespace, other, workerToken, otherToken, model, settings, body: { model, execution_settings: settings, inputs: { input_bytes: 100, duration_seconds: 1 } } };
 }
 
 test('private broker never returns Scheduler credentials and releases only after stop evidence', async context => {
@@ -92,4 +93,15 @@ test('worker exit is unknown stop and does not silently free its reservation', a
   await state.broker.workerExited(state.namespace);
   assert.equal(state.calls.at(-1).body.stopped, false);
   assert.equal(state.broker.executions.size, 1);
+});
+
+test('worker restart rejects old generation until a matching new binding arrives', async context => {
+  const state = await fixture(context);
+  state.worker.generation = 'd'.repeat(32);
+  await assert.rejects(state.broker.acquire(state.namespace, state.workerToken, state.body), error => error.status === 503);
+  await assert.rejects(state.broker.bind({ ...state.config, binding_revision: 3 }), error => error.status === 503);
+  assert.equal(state.calls.filter(call => call.endpoint === '/permits').length, 0);
+  await state.broker.bind({ ...state.config, binding_revision: 3, model_generations: { [state.model]: state.worker.generation } });
+  const receipt = await state.broker.acquire(state.namespace, state.workerToken, state.body);
+  await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
 });

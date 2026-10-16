@@ -69,6 +69,8 @@ export class SchedulerBroker {
     }
     const worker = await this.workerForNamespace(namespace);
     if (!worker) throw new SchedulerError(503, 'Private worker unavailable');
+    const generation = config.model_generations?.[model];
+    if (!/^[a-f0-9]{32}$/.test(generation || '') || generation !== worker.generation) throw new SchedulerError(503, 'Worker generation needs a new Scheduler binding');
     const response = await this.fetcher(`http://127.0.0.1:${worker.port}/v1/models`, { headers: { Authorization: `Bearer ${worker.token}` }, signal: AbortSignal.timeout(5000) });
     if (!response.ok || !(await response.json()).data?.some(row => row.id === model)) throw new SchedulerError(503, 'Private model is not ready');
     return upstream;
@@ -90,6 +92,7 @@ export class SchedulerBroker {
     for (const [model, executor] of models) {
       const namespace = config.namespaces?.[model];
       if (!/^[a-f0-9]{64}$/.test(namespace || '')) throw new SchedulerError(422, 'Full namespace required');
+      if (!/^[a-f0-9]{32}$/.test(config.model_generations?.[model] || '')) throw new SchedulerError(422, 'Worker generation required');
       const upstream = await this.model(config, namespace, model);
       if (!executors.some(row => row.id === executor && row.app_id === appId && row.task_type === 'model.infer' && row.contract_version === '1' && row.upstream_urls?.includes(upstream))) throw new SchedulerError(422, 'Executor is not approved for this private model');
       if (!config.model_limits[model] || !config.model_execution_settings[model]) throw new SchedulerError(422, 'Model calibration required');

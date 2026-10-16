@@ -50,6 +50,7 @@ async function workerFor(user) {
     await fs.promises.rm(endpointFile, { force: true });
     const workerToken = randomBytes(32).toString('hex');
     const schedulerToken = randomBytes(32).toString('hex');
+    const generation = randomBytes(16).toString('hex');
     const child = spawn(path.join(appRoot, 'node_modules/electron/dist/electron'), [appRoot, '--no-sandbox', '--disable-gpu', '--automation-background', `--automation-data-dir=${root}`], {
       uid, gid: uid, cwd: root,
       env: { ...process.env, HOME: root, XDG_CONFIG_HOME: root, NODE_ENV: 'production', VSUB_WEB: '1', VSUB_WORKER_TOKEN: workerToken, VSUB_SCHEDULER_WORKER_TOKEN: schedulerToken, VSUB_USER_ROOT: root, VSUB_NAMESPACE: user.namespace, VSUB_APP_ROOT: appRoot, V_ROUTER_URL: routerURL },
@@ -60,7 +61,7 @@ async function workerFor(user) {
     child.on('exit', () => { void scheduler.workerExited(user.namespace); workers.delete(user.namespace); log.end(); });
     for (let n = 0; n < 120; n++) {
       if (child.exitCode !== null) throw new Error('Subtitle runtime failed to start');
-      try { const endpoint = JSON.parse(await readFile(endpointFile, 'utf8')); if (endpoint.pid === child.pid) return { child, root, token: workerToken, schedulerToken, port: endpoint.port }; } catch {}
+      try { const endpoint = JSON.parse(await readFile(endpointFile, 'utf8')); if (endpoint.pid === child.pid) return { child, root, token: workerToken, schedulerToken, generation, port: endpoint.port }; } catch {}
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     child.kill(); throw new Error('Subtitle runtime startup timed out');
