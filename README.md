@@ -476,6 +476,8 @@ VOS 包强制本地推理调度：工作台和内部推理 API 使用相同的�
 
 授权按模型精确匹配真实运行参数和 profile，WAV 检查输入字节/时长，TTS 检查文本、参考音频和速度边界。更改模型运行参数须重新校准；模型可见不代表获准执行。租约失效或 kill 信号都不是停止证明，无法确认退出时保留未知停止状态。
 
+共享 Whisper 的用户链接只有在 `realpath` 与目录登记的公共权重完全相同、必需文件和已登记大小检查通过时，才使用稳定 export 引用匹配调度校准；原生进程打开核验后的真实文件路径。同名自建文件或另一用户文件不复用该批准。
+
 VOS 安装依赖统一应用 `com.ictrek.v-scheduler`，打包时从已发布的 GitHub Release 或应用商店解析依赖版本，查询失败则停止打包。模型管理默认地址为 `http://v-scheduler-model-hub:6005`；保留 `MODEL_HUB_API_URL` 配置键供现有安装升级使用，已有安装需将该参数切换到新地址。
 
 共享模型目录继续使用 `MODEL_HUB_SHARED_MODELS_PATH`（默认 `/data/vos_workspace/model_hub`），保留现有模型、导出路径和下载记录。统一模型网关仍使用 `http://v-router:8080/v1`；资源调度接口为 `http://v-router:8080/scheduler/api/v1`。接入及资源授权契约见 [V-Scheduler 接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md)。模型目录可见不代表本地推理已获调度授权。
