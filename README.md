@@ -472,6 +472,8 @@ VOS 包强制本地推理调度：工作台和内部推理 API 使用相同的�
 
 根网关通过 VOS 核验 V-Scheduler 应用身份后接收递增 revision 的绑定，私有保存为 `/data/scheduler.local.json`（0600）。调度服务凭据不下发用户进程；用户主进程只持有独立内部 RPC 凭据，原生子进程也不继承该凭据。转发请求核验并认领网关原许可，不重复预约。用户模型使用完整 64 位 namespace 隔离及固定内部 upstream；发现接口仍须用户授权，不能枚举其他用户。
 
+`GET /api/v1/scheduler/discovery` 只允许已启用的 V-Scheduler 应用身份访问，汇总当前已有 worker 的就绪目录，不创建 worker 或装载模型。返回完整 namespace、原生模型 ID 和固定内部 upstream，不含用户名、推理令牌或调度 RPC 令牌；普通用户仍只使用自己的发现接口。
+
 授权按模型精确匹配真实运行参数和 profile，WAV 检查输入字节/时长，TTS 检查文本、参考音频和速度边界。更改模型运行参数须重新校准；模型可见不代表获准执行。租约失效或 kill 信号都不是停止证明，无法确认退出时保留未知停止状态。
 
 VOS 安装依赖统一应用 `com.ictrek.v-scheduler`，打包时从已发布的 GitHub Release 或应用商店解析依赖版本，查询失败则停止打包。模型管理默认地址为 `http://v-scheduler-model-hub:6005`；保留 `MODEL_HUB_API_URL` 配置键供现有安装升级使用，已有安装需将该参数切换到新地址。

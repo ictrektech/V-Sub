@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { discoverLocalModels } from './discovery.mjs';
+import { discoverLocalModels, discoverSchedulerModels } from './discovery.mjs';
 import { SchedulerBroker, SchedulerError } from './scheduler.mjs';
 import fs from 'node:fs';
 import { mkdir, readFile, stat, chown, chmod, writeFile } from 'node:fs/promises';
@@ -99,7 +99,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, await scheduler.command(schedulerCommand[1], token, schedulerCommand[2], JSON.parse(await body(req, 65536))));
       return;
     }
-    if (pathname === '/api/v1/scheduler/binding') {
+    if (pathname === '/api/v1/scheduler/binding' || pathname === '/api/v1/scheduler/discovery') {
       let identity;
       try {
         const response = await fetch(userinfoURL, { headers: { Authorization: req.headers.authorization || '' }, redirect: 'error', signal: AbortSignal.timeout(8000) });
@@ -107,6 +107,11 @@ const server = http.createServer(async (req, res) => {
         identity = await response.json();
       } catch { throw new SchedulerError(401, 'VOS application identity required'); }
       if (identity.sub !== 'com.ictrek.v-scheduler' || identity.enable !== 1) throw new SchedulerError(403, 'V-Scheduler application identity required');
+      if (pathname === '/api/v1/scheduler/discovery') {
+        if (req.method !== 'GET') throw new SchedulerError(405, 'Method not allowed');
+        json(res, 200, await discoverSchedulerModels(workers));
+        return;
+      }
       if (req.method === 'POST') await scheduler.bind(JSON.parse(await body(req, 262144)));
       else if (req.method !== 'GET') throw new SchedulerError(405, 'Method not allowed');
       const config = await scheduler.configuration();
