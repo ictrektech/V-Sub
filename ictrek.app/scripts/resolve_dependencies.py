@@ -6,8 +6,47 @@ import os
 import re
 import sys
 import urllib.request
+import urllib.parse
 
 import yaml
+
+
+def appstore_version(app_id: str, base: str) -> str:
+    """私有 GitHub 仓库改从已授权隧道读取实时发布记录，不扩大 CI 令牌权限。"""
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"} or parsed.path not in {"", "/"}:
+        raise RuntimeError("App Store dependency verification requires the approved loopback tunnel")
+    with urllib.request.urlopen(f"{base.rstrip('/')}/api/appstore/apps/{app_id}", timeout=30) as response:
+        record = json.load(response)
+    detail = record.get("data") or {}
+    version = detail.get("current_version", "")
+    versions = [v for v in detail.get("versions", []) if re.fullmatch(r"\d+\.\d+\.\d+", v)]
+    archive = detail.get("app_tar_gz") or {}
+    expected = f"appstore/apps/{app_id}/{version}/app.tar.gz"
+    if (record.get("code") != 0 or detail.get("id") != app_id or not versions
+            or version != max(versions, key=lambda v: tuple(map(int, v.split("."))))
+            or archive.get("size", 0) <= 0 or archive.get("download_path") != expected):
+        raise RuntimeError(f"{app_id}: no verified latest published App Store package")
+    probe = urllib.request.Request(f"{base.rstrip('/')}/store/{expected}",
+                                   headers={"Range": "bytes=0-1", "Accept-Encoding": "identity"})
+    with urllib.request.urlopen(probe, timeout=30) as response:
+        prefix = response.read(2)
+        valid = prefix == b"\x1f\x8b"
+        if response.status == 206:
+            valid = valid and response.headers.get("Content-Range") == f"bytes 0-1/{archive['size']}"
+        elif response.status == 200:
+            count = len(prefix)
+            while count <= archive["size"]:
+                chunk = response.read(min(1024 * 1024, archive["size"] + 1 - count))
+                if not chunk:
+                    break
+                count += len(chunk)
+            valid = valid and count == archive["size"]
+        else:
+            valid = False
+        if not valid:
+            raise RuntimeError(f"{app_id}: published App Store archive is unavailable or changed")
+    return version
 
 
 def resolve_dependencies(manifest, repositories, api_url="https://api.github.com"):
@@ -18,25 +57,15 @@ def resolve_dependencies(manifest, repositories, api_url="https://api.github.com
     token = os.environ.get('VOS_DEPENDENCY_RELEASE_TOKEN') or os.environ.get('GH_TOKEN')
     if token:
         headers['Authorization'] = 'Bearer ' + token
-    catalog = None
     catalog_url = os.environ.get('VOS_DEPENDENCY_CATALOG_URL')
-    if catalog_url:
-        request = urllib.request.Request(catalog_url.rstrip('/') + '/api/appstore/apps')
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.load(response)
-        if payload.get('code') != 0 or not isinstance(payload.get('data'), list):
-            raise ValueError('App Store dependency catalog is unavailable')
-        catalog = {row['id']: row.get('latest_version') for row in payload['data']}
     resolved = []
     for dependency in dependencies:
         app_id = dependency['id']
         repository = repositories.get(app_id)
         if not repository:
             raise ValueError(f'{app_id}: dependency release repository is not configured')
-        if catalog is not None:
-            actual = catalog.get(app_id, '')
-            if not re.fullmatch(r'\d+\.\d+\.\d+', actual or ''):
-                raise ValueError(f'{app_id}: no published App Store version')
+        if catalog_url:
+            actual = appstore_version(app_id, catalog_url)
         else:
             request = urllib.request.Request(api_url.rstrip('/') + '/repos/' + repository + '/releases/latest', headers=headers)
             with urllib.request.urlopen(request, timeout=30) as response:

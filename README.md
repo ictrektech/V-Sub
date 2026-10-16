@@ -447,7 +447,7 @@ VOS navigation uses one top-level page entry, matching V-Voice; there is no addi
 
 VOS local-model downloads go through Model Hub using ModelScope only. `catalog/modelhub.json` maps all 54 original runtime model variants to compatible ModelScope files. Missing packages are mirrored to `vivibit/v-sub-*`; compatible V-Voice packages are reused. Desktop downloads retain their original behavior.
 
-Install Model Hub first. Set `MODEL_HUB_API_URL` (default `http://model-hub-backend:5005`) and set `MODEL_HUB_SHARED_MODELS_PATH` to the **same host directory** used by Model Hub (default `/data/vos_workspace/model_hub`). V-Sub mounts its public export subdirectory read-only. Ready shared models appear in the original engine selectors and remain privately registered in V-Router for each account. Downloads, retry and cancellation use Model Hub tasks; a joined download is not cancelled for other users. Removing a shared model in V-Sub detaches it only for that account. Delete shared weights in Model Hub.
+Install V-Scheduler first. Set `MODEL_HUB_API_URL` to its model-management API (default `http://v-scheduler-model-hub:6005`) and retain `MODEL_HUB_SHARED_MODELS_PATH` as the **same host directory** used by the original Model Hub (default `/data/vos_workspace/model_hub`). V-Sub mounts its public export subdirectory read-only. Ready shared models appear in the original engine selectors and remain privately registered in the unified gateway for each account. Downloads, retry and cancellation use V-Scheduler model-management tasks; a joined download is not cancelled for other users. Removing a shared model in V-Sub detaches it only for that account. Delete shared weights in V-Scheduler.
 
 Existing private imports and previous local downloads remain usable. Downloading the corresponding model again switches to the Model Hub package and retains the old files under `*.legacy-model-*`; it never uploads personal model files, cloned voices or reference audio. Personal settings, tasks and cloned voices remain isolated.
 
@@ -466,3 +466,14 @@ Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/expo
 VOS 发布标签 `vos-v-sub-v*` 仅触发 VOS 打包流程，桌面构建流程排除 `vos-*` 标签。
 
 仅修改主进程服务逻辑时可用 `docker/build_image.sh --sheet <sheet> --backend-only`，通过 `WORKBENCH_IMAGE` 选择同架构已发布工作台、`BASE_IMAGE` 选择目标 profile 的已发布运行时，检查 TypeScript 并重新编译主进程，不重建 Next 前端或本地模型运行时。
+# V-Scheduler 接入
+
+VOS 包强制本地推理调度：工作台和内部推理 API 使用相同的原生边界。Whisper、Sherpa ASR/TTS、faster-whisper、说话人分离、VAD 和降噪均先申请许可；模型进程真实退出后才确认释放。缺少绑定/模型校准时拒绝计算，不转为无调度本地执行。任意自定义 CLI 没有可验证的模型和进程树预算，在 VOS 调度模式不可用；桌面版行为不变。
+
+根网关通过 VOS 核验 V-Scheduler 应用身份后接收递增 revision 的绑定，私有保存为 `/data/scheduler.local.json`（0600）。调度服务凭据不下发用户进程；用户主进程只持有独立内部 RPC 凭据，原生子进程也不继承该凭据。转发请求核验并认领网关原许可，不重复预约。用户模型使用完整 64 位 namespace 隔离及固定内部 upstream；发现接口仍须用户授权，不能枚举其他用户。
+
+授权按模型精确匹配真实运行参数和 profile，WAV 检查输入字节/时长，TTS 检查文本、参考音频和速度边界。更改模型运行参数须重新校准；模型可见不代表获准执行。租约失效或 kill 信号都不是停止证明，无法确认退出时保留未知停止状态。
+
+VOS 安装依赖统一应用 `com.ictrek.v-scheduler`，打包时从已发布的 GitHub Release 或应用商店解析依赖版本，查询失败则停止打包。模型管理默认地址为 `http://v-scheduler-model-hub:6005`；保留 `MODEL_HUB_API_URL` 配置键供现有安装升级使用，已有安装需将该参数切换到新地址。
+
+共享模型目录继续使用 `MODEL_HUB_SHARED_MODELS_PATH`（默认 `/data/vos_workspace/model_hub`），保留现有模型、导出路径和下载记录。统一模型网关仍使用 `http://v-router:8080/v1`；资源调度接口为 `http://v-router:8080/scheduler/api/v1`。接入及资源授权契约见 [V-Scheduler 接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md)。模型目录可见不代表本地推理已获调度授权。

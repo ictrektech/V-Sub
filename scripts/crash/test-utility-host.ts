@@ -326,6 +326,23 @@ async function main() {
     assert.equal(ok.logs.length, 0);
   });
 
+  await test('调度停止证明等待真实退出，kill 本身不是证明', async () => {
+    const pending = setup();
+    const confirmation = pending.host.stopConfirmed(100);
+    assert.equal(pending.proc.killCalls, 1);
+    pending.proc.emit('exit', 0);
+    assert.equal(await confirmation, true);
+    assert.equal(await pending.host.stopConfirmed(1), true);
+    const unknown = setup();
+    assert.equal(await unknown.host.stopConfirmed(1), false);
+  });
+
+  await test('原生子进程不继承主进程的私有调度凭据', () => {
+    const env = buildSherpaWorkerEnv('/lib', { VSUB_SCHEDULER_WORKER_TOKEN: 'private', PATH: '/bin' });
+    assert.equal(env.VSUB_SCHEDULER_WORKER_TOKEN, undefined);
+    assert.ok(env.PATH.includes('/lib'));
+  });
+
   finish('utilityHost');
 }
 

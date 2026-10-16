@@ -9,6 +9,8 @@ import {
   TranscribeSegment,
 } from './protocol';
 import { isProtocolSupported } from './protocolSupport';
+import { scheduledAudio, cancelScheduled } from '../nativeScheduling';
+import { schedulingRequired, hasScheduledExecution, SchedulingError } from '../../../vos/scheduler-client.mjs';
 import type { PyEngineId } from '../../../types/engine';
 
 export interface EngineCommand {
@@ -79,6 +81,7 @@ export function buildSanitizedEnv(
   delete env.PYTHONSTARTUP;
   delete env.VIRTUAL_ENV;
   delete env.CONDA_PREFIX;
+  delete env.VSUB_SCHEDULER_WORKER_TOKEN;
   // 再按三层模型注入受控值：基座 prefix + 当前引擎包 site-packages
   if (overrides?.pythonHome) env.PYTHONHOME = overrides.pythonHome;
   if (overrides?.pythonPath) env.PYTHONPATH = overrides.pythonPath;
@@ -287,6 +290,7 @@ export class PythonRuntimeManager {
     params: Record<string, unknown>,
     options?: RequestOptions,
   ): Promise<T> {
+    if (schedulingRequired() && ['preload', 'transcribe'].includes(method) && !hasScheduledExecution()) throw new SchedulingError(503, 'Python model admission required');
     if (!this.proc) {
       return Promise.reject(
         new PythonEngineError(
@@ -327,6 +331,15 @@ export class PythonRuntimeManager {
     handlers?: TranscribeHandlers,
   ): { id: string; result: Promise<TranscribeResult> } {
     const id = `transcribe-${++this.seq}`;
+    if (schedulingRequired()) {
+      const { audio_file, initial_prompt, ...runtime } = params;
+      return { id, result: scheduledAudio(String(audio_file), { profile: process.env.VSUB_PROFILE, runtime: 'faster-whisper', parameters: runtime }, () => this.transcribeNative(id, params, handlers), () => this.stopConfirmed(), () => this.cancel(id), { prompt_characters: String(initial_prompt || '').length }, undefined, id) };
+    }
+    return { id, result: this.transcribeNative(id, params, handlers) };
+  }
+
+  private transcribeNative(id: string, params: Record<string, unknown>, handlers?: TranscribeHandlers): Promise<TranscribeResult> {
+    if (schedulingRequired() && !hasScheduledExecution()) throw new SchedulingError(503, 'Python model admission required');
     const result = this.requestWithId<TranscribeResult>(
       id,
       'transcribe',
@@ -347,10 +360,11 @@ export class PythonRuntimeManager {
         },
       },
     );
-    return { id, result };
+    return result;
   }
 
   cancel(id: string): void {
+    cancelScheduled(id);
     this.notify('cancel', { id });
   }
 
@@ -379,6 +393,19 @@ export class PythonRuntimeManager {
       });
     });
     this.stopping = false;
+  }
+
+  async stopConfirmed(): Promise<boolean> {
+    const proc = this.proc;
+    if (!proc || proc.exitCode !== null || proc.signalCode !== null) return true;
+    this.stopping = true;
+    const stopped = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 10000);
+      proc.once('exit', () => { clearTimeout(timer); resolve(true); });
+      try { proc.kill('SIGKILL'); } catch { clearTimeout(timer); resolve(false); }
+    });
+    if (stopped) this.stopping = false;
+    return stopped;
   }
 
   private write(message: Record<string, unknown>): void {

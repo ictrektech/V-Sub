@@ -1,7 +1,8 @@
 x-vsub-env: &vsub-env
   APP_VERSION: "__APP_VERSION__"
   VSUB_DATA_DIR: /data
-  MODEL_HUB_API_URL: ${MODEL_HUB_API_URL:-http://model-hub-backend:5005}
+  VSUB_SCHEDULER_REQUIRED: "true"
+  MODEL_HUB_API_URL: ${MODEL_HUB_API_URL:-http://v-scheduler-model-hub:6005}
   MODEL_HUB_EXPORTS_PATH: /modelhub
   V_ROUTER_URL: ${V_ROUTER_URL:-http://v-router:8080}
   VOS_OIDC_USERINFO_URL: ${VOS_OIDC_USERINFO_URL:-http://host.docker.internal:8105/v1000/oauth2/userinfo}

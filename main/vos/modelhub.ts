@@ -4,7 +4,7 @@ import { app, type BrowserWindow } from 'electron';
 import catalog from '../../catalog/modelhub.json';
 
 type Model = typeof catalog[number];
-const hubUrl = process.env.MODEL_HUB_API_URL || 'http://model-hub-backend:5005';
+const hubUrl = process.env.MODEL_HUB_API_URL || 'http://v-scheduler-model-hub:6005';
 const hubRoot = process.env.MODEL_HUB_SHARED_MODELS_PATH || '/modelhub';
 const exportRoot = process.env.MODEL_HUB_EXPORTS_PATH || path.join(hubRoot, 'export');
 let lastSync = 0;

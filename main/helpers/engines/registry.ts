@@ -8,6 +8,8 @@ import { localCliEngineAdapter } from './localCliEngine';
 import { cloudAsrEngineAdapter } from './cloudAsrEngine';
 import type { TranscriptionEngine } from '../../../types/engine';
 import type { TranscriptionEngineAdapter } from './types';
+import { withNativeModel } from '../nativeScheduling';
+import { schedulingRequired, SchedulingError } from '../../../vos/scheduler-client.mjs';
 
 const adapters: TranscriptionEngineAdapter[] = [
   builtinEngineAdapter,
@@ -23,7 +25,18 @@ const adapters: TranscriptionEngineAdapter[] = [
 export function getEngineAdapter(
   id: TranscriptionEngine,
 ): TranscriptionEngineAdapter | undefined {
-  return adapters.find((a) => a.id === id);
+  const adapter = adapters.find((a) => a.id === id);
+  if (!adapter || !schedulingRequired() || id === 'cloud') return adapter;
+  return {
+    ...adapter,
+    prewarm: undefined,
+    transcribe: (context) => {
+      if (id === 'localCli') throw new SchedulingError(503, 'Custom commands have no calibrated executor');
+      const model = context.formData.model;
+      if (typeof model !== 'string' || !model) throw new SchedulingError(422, 'Explicit local model required');
+      return withNativeModel(`${id}/${model}`, () => adapter.transcribe(context));
+    },
+  };
 }
 
 /**
@@ -47,5 +60,5 @@ export function getEngineAdapterForTask(formData?: {
 }
 
 export function listEngineAdapters(): TranscriptionEngineAdapter[] {
-  return adapters;
+  return adapters.map(adapter => getEngineAdapter(adapter.id)!);
 }

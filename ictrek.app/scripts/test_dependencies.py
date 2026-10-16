@@ -19,9 +19,8 @@ class UnifiedGatewayDependencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)
             (stage / 'manifest.yml').write_text(yaml.safe_dump(source))
-            catalog = {'code': 0, 'data': [{'id': 'com.ictrek.v-scheduler', 'latest_version': '0.1.99'}]}
-            with patch.dict(os.environ, {'VOS_DEPENDENCY_CATALOG_URL': 'http://catalog.test'}), patch(
-                'urllib.request.urlopen', return_value=io.BytesIO(json.dumps(catalog).encode())
+            with patch.dict(os.environ, {'VOS_DEPENDENCY_CATALOG_URL': 'http://127.0.0.1:18899'}), patch(
+                'resolve_dependencies.appstore_version', return_value='0.1.99'
             ):
                 package.resolve_manifest(stage)
             staged = yaml.safe_load((stage / 'manifest.yml').read_text())
@@ -32,9 +31,9 @@ class UnifiedGatewayDependencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stage = Path(directory)
             (stage / 'manifest.yml').write_text((package.SRC / 'manifest.yml').read_text())
-            with patch.dict(os.environ, {'VOS_DEPENDENCY_CATALOG_URL': 'http://catalog.test'}), patch(
-                'urllib.request.urlopen', return_value=io.BytesIO(b'{"code":0,"data":[]}')
-            ), self.assertRaisesRegex(ValueError, 'no published App Store version'):
+            with patch.dict(os.environ, {'VOS_DEPENDENCY_CATALOG_URL': 'http://127.0.0.1:18899'}), patch(
+                'resolve_dependencies.appstore_version', side_effect=RuntimeError('no verified latest published App Store package')
+            ), self.assertRaisesRegex(RuntimeError, 'no verified latest'):
                 package.resolve_manifest(stage)
 
 

@@ -9,6 +9,7 @@ import { invokeHandler, sendHandler } from '../automation/handlers';
 import { automationEvents, createServiceEvent } from '../automation/events';
 import { refreshRouter, routerStatus } from './router';
 import { startLocalModelRefresh, handleLocalInference, localModelStatus } from './localModels';
+import { withSchedulerHeaders } from '../../vos/scheduler-client.mjs';
 
 const contexts = new AsyncLocalStorage<{ saved: string[] }>();
 const clients = new Set<http.ServerResponse>();
@@ -58,7 +59,7 @@ export async function startWebServer() {
     const actual = Buffer.from(req.headers.authorization || ''), expected = Buffer.from(`Bearer ${token}`);
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { reply(401, { error: 'Worker authentication required' }); return; }
     try {
-      if (await handleLocalInference(req, res)) return;
+      if (await withSchedulerHeaders(req.headers, () => handleLocalInference(req, res))) return;
       const pathname = new URL(req.url!, 'http://localhost').pathname;
       if (pathname === '/api/events') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -85,7 +86,7 @@ export async function startWebServer() {
       const event = browserEvent(clientId); const context = { saved: [] as string[] };
       const result = await contexts.run(context, async () => mode === 'send' ? sendHandler(channel, event, ...args) : invokeHandler(channel, event, ...args));
       reply(200, { result: result ?? null, downloads: context.saved.filter(file => fs.existsSync(file)) });
-    } catch (error) { reply(400, { error: error instanceof Error ? error.message : 'Operation failed' }); }
+    } catch (error) { reply(Number((error as any)?.status) || 400, { error: error instanceof Error ? error.message : 'Operation failed' }); }
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as any).port;

@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { discoverLocalModels } from './discovery.mjs';
+import { SchedulerBroker, SchedulerError } from './scheduler.mjs';
 import fs from 'node:fs';
 import { mkdir, readFile, stat, chown, chmod, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -15,6 +16,7 @@ const sessions = new Map();
 const workers = new Map();
 const routerURL = process.env.V_ROUTER_URL || 'http://v-router:8080';
 const userinfoURL = process.env.VOS_OIDC_USERINFO_URL || 'http://host.docker.internal:8105/v1000/oauth2/userinfo';
+const scheduler = new SchedulerBroker({ dataRoot, workerForNamespace: namespace => workers.get(namespace) });
 const json = (res, code, value, headers = {}) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(value)); };
 async function body(req, limit = 8 * 1024 * 1024) {
   const chunks = []; let bytes = 0;
@@ -47,17 +49,18 @@ async function workerFor(user) {
     const endpointFile = path.join(root, 'web-endpoint.json');
     await fs.promises.rm(endpointFile, { force: true });
     const workerToken = randomBytes(32).toString('hex');
+    const schedulerToken = randomBytes(32).toString('hex');
     const child = spawn(path.join(appRoot, 'node_modules/electron/dist/electron'), [appRoot, '--no-sandbox', '--disable-gpu', '--automation-background', `--automation-data-dir=${root}`], {
       uid, gid: uid, cwd: root,
-      env: { ...process.env, HOME: root, XDG_CONFIG_HOME: root, NODE_ENV: 'production', VSUB_WEB: '1', VSUB_WORKER_TOKEN: workerToken, VSUB_USER_ROOT: root, VSUB_NAMESPACE: user.namespace, VSUB_APP_ROOT: appRoot, V_ROUTER_URL: routerURL },
+      env: { ...process.env, HOME: root, XDG_CONFIG_HOME: root, NODE_ENV: 'production', VSUB_WEB: '1', VSUB_WORKER_TOKEN: workerToken, VSUB_SCHEDULER_WORKER_TOKEN: schedulerToken, VSUB_USER_ROOT: root, VSUB_NAMESPACE: user.namespace, VSUB_APP_ROOT: appRoot, V_ROUTER_URL: routerURL },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     const log = fs.createWriteStream(path.join(root, 'runtime.log'), { mode: 0o600 });
     child.stderr.pipe(log);
-    child.on('exit', () => { workers.delete(user.namespace); log.end(); });
+    child.on('exit', () => { void scheduler.workerExited(user.namespace); workers.delete(user.namespace); log.end(); });
     for (let n = 0; n < 120; n++) {
       if (child.exitCode !== null) throw new Error('Subtitle runtime failed to start');
-      try { const endpoint = JSON.parse(await readFile(endpointFile, 'utf8')); if (endpoint.pid === child.pid) return { child, root, token: workerToken, port: endpoint.port }; } catch {}
+      try { const endpoint = JSON.parse(await readFile(endpointFile, 'utf8')); if (endpoint.pid === child.pid) return { child, root, token: workerToken, schedulerToken, port: endpoint.port }; } catch {}
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     child.kill(); throw new Error('Subtitle runtime startup timed out');
@@ -89,6 +92,27 @@ const server = http.createServer(async (req, res) => {
     let pathname = url.pathname;
     if (pathname === base || pathname.startsWith(base + '/')) pathname = pathname.slice(base.length) || '/';
     if (pathname === '/health') { json(res, 200, { ok: true, version: process.env.APP_VERSION || 'development', workers: workers.size }); return; }
+    const schedulerCommand = /^\/internal\/scheduler\/([a-f0-9]{64})\/(acquire|verify|release)$/.exec(pathname);
+    if (schedulerCommand && req.method === 'POST') {
+      if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) throw new SchedulerError(403, 'Loopback worker connection required');
+      const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1] || '';
+      json(res, 200, await scheduler.command(schedulerCommand[1], token, schedulerCommand[2], JSON.parse(await body(req, 65536))));
+      return;
+    }
+    if (pathname === '/api/v1/scheduler/binding') {
+      let identity;
+      try {
+        const response = await fetch(userinfoURL, { headers: { Authorization: req.headers.authorization || '' }, redirect: 'error', signal: AbortSignal.timeout(8000) });
+        if (!response.ok) throw new Error();
+        identity = await response.json();
+      } catch { throw new SchedulerError(401, 'VOS application identity required'); }
+      if (identity.sub !== 'com.ictrek.v-scheduler' || identity.enable !== 1) throw new SchedulerError(403, 'V-Scheduler application identity required');
+      if (req.method === 'POST') await scheduler.bind(JSON.parse(await body(req, 262144)));
+      else if (req.method !== 'GET') throw new SchedulerError(405, 'Method not allowed');
+      const config = await scheduler.configuration();
+      json(res, 200, { configured: true, protocol_version: 1, binding_revision: config.binding_revision, approved_model_count: Object.keys(config.models || {}).length });
+      return;
+    }
     if (pathname === '/api/v1/discovery' && req.method === 'GET') {
       const match = /^Bearer (.+)$/i.exec(req.headers.authorization || '');
       if (!match) { json(res, 401, { error: 'VOS access token required' }); return; }
@@ -117,7 +141,8 @@ const server = http.createServer(async (req, res) => {
       if (!pending) { json(res, 503, { error: 'Model runtime unavailable' }); return; }
       const worker = await pending;
       if (req.headers.authorization !== `Bearer ${worker.token}`) { json(res, 401, { error: 'Inference authentication required' }); return; }
-      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: inference[2] + url.search, method: req.method, headers: { 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}` } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
+      const admission = Object.fromEntries(['x-vscheduler-permit-id', 'x-vscheduler-execution-token', 'x-vscheduler-executor-id'].filter(name => typeof req.headers[name] === 'string').map(name => [name, req.headers[name]]));
+      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: inference[2] + url.search, method: req.method, headers: { ...admission, 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}` } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
       proxy.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'Local inference unavailable' }); else res.destroy(); });
       req.pipe(proxy); return;
     }
@@ -146,7 +171,7 @@ const server = http.createServer(async (req, res) => {
     let file = confined(root, path.join(root, decoded));
     if (decoded.endsWith('/')) file = path.join(file, 'index.html');
     await serveFile(req, res, await existingFile(root, file));
-  } catch (error) { if (!res.headersSent) json(res, 400, { error: error.message }); else res.destroy(); }
+  } catch (error) { if (!res.headersSent) json(res, error instanceof SchedulerError ? error.status : 400, { error: error.message }); else res.destroy(); }
 });
 await mkdir(path.join(dataRoot, 'users'), { recursive: true, mode: 0o711 });
 await chmod(dataRoot, 0o711); await chmod(path.join(dataRoot, 'users'), 0o711);

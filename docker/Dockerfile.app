@@ -11,3 +11,4 @@ ARG PROFILE
 ENV VSUB_PROFILE=${PROFILE}
 COPY --from=build /opt/v-sub/app /opt/v-sub/app
 COPY --from=build /opt/v-sub/vos /opt/v-sub/vos
+COPY --from=build /opt/v-sub/extraResources/whisper-scheduled-worker.cjs /opt/v-sub/extraResources/whisper-scheduled-worker.cjs

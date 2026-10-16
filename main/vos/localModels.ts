@@ -13,8 +13,11 @@ import { getInstalledTtsModels, TTS_MODELS, getTtsModelRequest, resolveTtsVoiceS
 import { getSherpaTtsRuntime } from '../helpers/sherpaOnnx/ttsRuntime';
 import { getClonedVoices } from '../helpers/voiceClone/voiceCloneManager';
 import { previewVoice } from '../helpers/dubbing/dubbingProcessor';
+import { isSpeakerDiarizationModelInstalled } from '../helpers/speakerDiarization/modelCatalog';
+import { resolveBundledVadPath, resolveBundledDenoisePath } from '../helpers/modelImport';
+import { getExtraResourcesPath } from '../helpers/utils';
 
-type LocalModel = { id: string; kind: 'asr' | 'tts'; engine?: any; model: string; endpoints: string[]; capabilities: string[] };
+type LocalModel = { id: string; kind: 'asr' | 'tts' | 'diarization'; engine?: any; model: string; endpoints: string[]; capabilities: string[] };
 let models: LocalModel[] = [];
 let busy = false;
 let refreshError = '';
@@ -39,6 +42,10 @@ export async function refreshLocalModels() {
   for (const model of getInstalledTtsModels()) {
     if (!TTS_MODELS[model].voices.length && !getClonedVoices().some(v => v.engine === 'zipvoice' && v.refText && v.refWavPath && fs.existsSync(v.refWavPath))) continue;
     next.push({ id: `${prefix}/tts/${model}`, model, kind: 'tts', endpoints: ['audio/speech'], capabilities: ['tts'] });
+  }
+  if (isSpeakerDiarizationModelInstalled()) next.push({ id: `${prefix}/diarization/default`, model: 'default', kind: 'diarization', endpoints: [], capabilities: ['speaker-diarization'] });
+  for (const [native, file] of [['vad/silero', resolveBundledVadPath(getExtraResourcesPath())], ['denoise/gtcrn', resolveBundledDenoisePath(getExtraResourcesPath())]]) {
+    if (fs.existsSync(file)) next.push({ id: `${prefix}/${native}`, model: native, kind: 'diarization', endpoints: [], capabilities: [native.split('/')[0]] });
   }
   models = next;
  }

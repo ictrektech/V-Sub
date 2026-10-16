@@ -43,6 +43,12 @@ jobs:
           python3 -m pip install 'PyYAML==6.0.3'
           python3 -m unittest discover -s ictrek.app/scripts -p 'test_dependencies.py'
 
+      - name: Connect dependency catalog tunnel
+        env:
+          APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+        run: bash ictrek.app/scripts/appstore_tunnel.sh open
+
       - name: Build pull-mode package
         env:
           APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
@@ -100,6 +106,12 @@ jobs:
           export VOS_DEPENDENCY_CATALOG_URL="http://127.0.0.1:18899"
           PACKAGE_VERSION="$VERSION" ./ictrek.app/scripts/package.sh
           test -f "ictrek.app/dist/v_sub_${VERSION}_pull.tar"
+
+      - name: Close dependency catalog tunnel
+        if: always()
+        env:
+          APPSTORE_IP: ${{ secrets.APPSTORE_IP }}
+        run: bash ictrek.app/scripts/appstore_tunnel.sh close
 
       - name: Create release notes
         env:

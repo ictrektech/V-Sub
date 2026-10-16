@@ -9,5 +9,9 @@ export async function discoverLocalModels(user, pending) {
   });
   if (!response.ok) throw new Error('Local model discovery unavailable');
   const payload = await response.json();
-  return { ...empty, base_path: `/inference/${user.namespace}/v1`, api_key: worker.token, models: payload.data || [] };
+  return { ...empty, base_path: `/inference/${user.namespace}/v1`, api_key: worker.token, models: payload.data || [], scheduler: {
+    protocol_version: 1, app_id: 'com.ictrek.v-sub', binding_endpoint: '/api/v1/scheduler/binding',
+    namespace: user.namespace, upstream_url: `http://v-sub-backend:7090/inference/${user.namespace}/v1`,
+    models: (payload.data || []).map(model => ({ id: model.id, task_type: 'model.infer' })),
+  } };
 }

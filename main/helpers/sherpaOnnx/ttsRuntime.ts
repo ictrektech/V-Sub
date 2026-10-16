@@ -4,6 +4,10 @@ import { getExtraResourcesPath } from '../utils';
 import { getSherpaLibDir, isSherpaLibInstalled } from './sherpaLibPaths';
 import { spawnAppUtilityHost } from '../crash/appUtilityHost';
 import { beginCrashContext } from '../crash/crashContext';
+import fs from 'fs';
+import { scheduleCancelable, cancelScheduled } from '../nativeScheduling';
+import { getInstalledTtsModels, getTtsModelRequest } from '../ttsModelCatalog';
+import { schedulingRequired, hasScheduledExecution, SchedulingError } from '../../../vos/scheduler-client.mjs';
 import {
   buildSherpaWorkerEnv,
   describeHostExit,
@@ -136,7 +140,7 @@ class SherpaTtsRuntime {
     proc.onExit((info) => {
       // shrinkTo/dispose 先置 alive=false 再 kill：此时的非零退出码是
       // 信号终止的垃圾值（如 0x6B0E7680），属预期停止，不按异常处理。
-      const expected = !handle.alive;
+      const expected = !handle.alive || info.killedByUs;
       handle.alive = false;
       this.pool = this.pool.filter((h) => h !== handle);
       if (expected) {
@@ -208,6 +212,7 @@ class SherpaTtsRuntime {
 
   /** 预热：仅 load 模型，不合成（只预热一个成员）。失败非致命。 */
   prewarm(model: TtsModelRequest): void {
+    if (schedulingRequired()) return;
     try {
       this.pickWorker().proc.postMessage({ type: 'load', model });
     } catch (e) {
@@ -229,8 +234,26 @@ class SherpaTtsRuntime {
     outWavPath: string;
     generationConfig?: TtsGenerationConfig;
   }): { id: string; result: Promise<TtsSynthesisResult> } {
-    const handle = this.pickWorker();
     const id = `s${++this.seq}`;
+    if (schedulingRequired()) {
+      const model = getInstalledTtsModels().find(modelId => getTtsModelRequest(modelId).tokens === req.model.tokens);
+      if (!model) throw new SchedulingError(503, 'Installed TTS model identity required');
+      return { id, result: scheduleCancelable(id, {
+        model: `tts/${model}`,
+        executionSettings: { profile: process.env.VSUB_PROFILE, runtime: 'sherpa-onnx', model: req.model, pool_size: 1, generation_steps: req.generationConfig?.numSteps ?? 4, speed: req.speed ?? 1, language: req.language ?? '', sid: req.sid },
+        inputs: { text_characters: req.text.length, reference_bytes: req.generationConfig?.refWavPath ? fs.statSync(req.generationConfig.refWavPath).size : 0, reference_text_characters: req.generationConfig?.refText.length || 0 },
+        run: () => this.synthesizeNative(id, req),
+        stop: () => this.stopConfirmed(),
+        cancel: () => this.cancel(id),
+      }) };
+    }
+    return { id, result: this.synthesizeNative(id, req) };
+  }
+
+  private synthesizeNative(id: string, req: { model: TtsModelRequest; text: string; language?: string; sid: number; speed?: number; outWavPath: string; generationConfig?: TtsGenerationConfig }): Promise<TtsSynthesisResult> {
+    if (schedulingRequired() && !hasScheduledExecution()) throw new SchedulingError(503, 'TTS admission required');
+    if (schedulingRequired()) this.shrinkTo(1);
+    const handle = this.pickWorker();
     handle.busy += 1;
     const result = new Promise<TtsSynthesisResult>((resolve, reject) => {
       this.pending.set(id, { resolve, reject, handle });
@@ -244,10 +267,11 @@ class SherpaTtsRuntime {
     });
     result.then(endContext, endContext);
     handle.proc.postMessage({ type: 'synthesize', id, ...req });
-    return { id, result };
+    return result;
   }
 
   cancel(id: string): void {
+    cancelScheduled(id);
     const entry = this.pending.get(id);
     if (entry?.handle.alive) {
       entry.handle.proc.postMessage({ type: 'cancel', id });
@@ -265,6 +289,13 @@ class SherpaTtsRuntime {
       }
     }
     this.pool = [];
+  }
+
+  async stopConfirmed(): Promise<boolean> {
+    const workers = [...this.pool];
+    const stopped = await Promise.all(workers.map(worker => worker.proc.stopConfirmed()));
+    if (stopped.every(Boolean)) this.pool = this.pool.filter(worker => !workers.includes(worker));
+    return stopped.every(Boolean);
   }
 }
 

@@ -10,3 +10,4 @@ RUN node node_modules/typescript/bin/tsc --noEmit --incremental false -p main/ts
 FROM ${BASE_IMAGE}
 COPY --from=build /opt/v-sub/app/background.js /opt/v-sub/app/preload.js /opt/v-sub/app/
 COPY --from=build /opt/v-sub/vos /opt/v-sub/vos
+COPY --from=build /opt/v-sub/extraResources/whisper-scheduled-worker.cjs /opt/v-sub/extraResources/whisper-scheduled-worker.cjs

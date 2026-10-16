@@ -14,6 +14,8 @@ import type { FunasrAddonParams } from '../engines/funasrParams';
 import type { QwenAddonParams } from '../engines/qwenParams';
 import type { FireRedAddonParams } from '../engines/fireRedParams';
 import type { ParakeetAddonParams } from '../engines/parakeetParams';
+import { scheduledAudio, cancelScheduled } from '../nativeScheduling';
+import { schedulingRequired, hasScheduledExecution, SchedulingError } from '../../../vos/scheduler-client.mjs';
 
 export interface SherpaModelRequest {
   vadModel: string;
@@ -102,6 +104,7 @@ class SherpaFunasrRuntime {
   >();
 
   private ensureWorker(): UtilityHost {
+    if (schedulingRequired() && !hasScheduledExecution()) throw new SchedulingError(503, 'ASR admission required');
     if (this.worker) return this.worker;
     if (!isSherpaLibInstalled()) {
       throw new Error('sherpa native lib not installed');
@@ -117,8 +120,9 @@ class SherpaFunasrRuntime {
     w.onExit((info) => {
       // dispose() 先置 this.worker=null 再 kill：此时的非零退出码是信号终止的
       // 垃圾值，属预期停止（模型删除/导入前释放），不按异常处理。
-      const expected = this.worker !== w;
+      const expected = this.worker !== w || info.killedByUs;
       if (expected) {
+        if (this.worker === w) this.worker = null;
         this.failAll(new Error('本地转写引擎已释放（模型切换），请重试'));
         return;
       }
@@ -165,6 +169,7 @@ class SherpaFunasrRuntime {
 
   /** 预热：仅 load 模型，不转写。失败非致命。 */
   prewarm(model: SherpaModelRequest): void {
+    if (schedulingRequired()) return;
     try {
       this.ensureWorker().postMessage({ type: 'load', ...model });
     } catch (e) {
@@ -178,8 +183,15 @@ class SherpaFunasrRuntime {
     onProgress?: (p: number) => void,
     onActivity?: ActivityObserver,
   ): { id: string; result: Promise<TranscriptionResult> } {
-    const w = this.ensureWorker();
     const id = `t${++this.seq}`;
+    if (schedulingRequired()) {
+      return { id, result: scheduledAudio(audioFile, { profile: process.env.VSUB_PROFILE, runtime: 'sherpa-onnx', model }, () => this.transcribeNative(id, model, audioFile, onProgress, onActivity), () => this.stopConfirmed(), () => this.cancel(id), {}, undefined, id) };
+    }
+    return { id, result: this.transcribeNative(id, model, audioFile, onProgress, onActivity) };
+  }
+
+  private transcribeNative(id: string, model: SherpaModelRequest, audioFile: string, onProgress?: (p: number) => void, onActivity?: ActivityObserver): Promise<TranscriptionResult> {
+    const w = this.ensureWorker();
     const result = new Promise<TranscriptionResult>((resolve, reject) => {
       this.pending.set(id, { resolve, reject, onProgress, onActivity });
     });
@@ -191,7 +203,7 @@ class SherpaFunasrRuntime {
     });
     result.then(endContext, endContext);
     w.postMessage({ type: 'transcribe', id, audioFile, ...model });
-    return { id, result };
+    return result;
   }
 
   /**
@@ -206,8 +218,13 @@ class SherpaFunasrRuntime {
     id: string;
     result: Promise<{ segments: Array<{ start: number; end: number }> }>;
   } {
-    const w = this.ensureWorker();
     const id = `v${++this.seq}`;
+    if (schedulingRequired()) return { id, result: scheduledAudio(audioFile, { profile: process.env.VSUB_PROFILE, runtime: 'sherpa-vad', vadModel, params }, () => this.detectSpeechNative(id, audioFile, vadModel, params), () => this.stopConfirmed(), () => this.cancel(id), {}, 'vad/silero') };
+    return { id, result: this.detectSpeechNative(id, audioFile, vadModel, params) };
+  }
+
+  private detectSpeechNative(id: string, audioFile: string, vadModel: string, params: VadParams): Promise<{ segments: Array<{ start: number; end: number }> }> {
+    const w = this.ensureWorker();
     const result = new Promise<{
       segments: Array<{ start: number; end: number }>;
     }>((resolve, reject) => {
@@ -220,7 +237,7 @@ class SherpaFunasrRuntime {
     });
     result.then(endContext, endContext);
     w.postMessage({ type: 'detectSpeech', id, audioFile, vadModel, params });
-    return { id, result };
+    return result;
   }
 
   /**
@@ -232,8 +249,13 @@ class SherpaFunasrRuntime {
     denoiseModel: string,
     outFile: string,
   ): { id: string; result: Promise<void> } {
-    const w = this.ensureWorker();
     const id = `d${++this.seq}`;
+    if (schedulingRequired()) return { id, result: scheduledAudio(audioFile, { profile: process.env.VSUB_PROFILE, runtime: 'sherpa-denoise', denoiseModel }, () => this.denoiseNative(id, audioFile, denoiseModel, outFile), () => this.stopConfirmed(), () => this.cancel(id), {}, 'denoise/gtcrn') };
+    return { id, result: this.denoiseNative(id, audioFile, denoiseModel, outFile) };
+  }
+
+  private denoiseNative(id: string, audioFile: string, denoiseModel: string, outFile: string): Promise<void> {
+    const w = this.ensureWorker();
     const result = new Promise<void>((resolve, reject) => {
       this.pending.set(id, {
         resolve: () => resolve(),
@@ -247,16 +269,25 @@ class SherpaFunasrRuntime {
     });
     result.then(endContext, endContext);
     w.postMessage({ type: 'denoise', id, audioFile, denoiseModel, outFile });
-    return { id, result };
+    return result;
   }
 
   cancel(id: string): void {
+    cancelScheduled(id);
     this.worker?.postMessage({ type: 'cancel', id });
   }
 
   dispose(): void {
     this.worker?.kill();
     this.worker = null;
+  }
+
+  async stopConfirmed(): Promise<boolean> {
+    const worker = this.worker;
+    if (!worker) return true;
+    const stopped = await worker.stopConfirmed();
+    if (stopped && this.worker === worker) this.worker = null;
+    return stopped;
   }
 }
 

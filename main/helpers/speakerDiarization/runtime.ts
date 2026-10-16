@@ -8,6 +8,8 @@ import { spawnAppUtilityHost } from '../crash/appUtilityHost';
 import { beginCrashContext } from '../crash/crashContext';
 import { buildSherpaWorkerEnv, type UtilityHost } from '../crash/utilityHost';
 import type { SpeakerDiarizationSegment } from './alignment';
+import { scheduledAudio, cancelScheduled } from '../nativeScheduling';
+import { schedulingRequired } from '../../../vos/scheduler-client.mjs';
 
 interface PendingDiarization {
   process: UtilityHost;
@@ -39,6 +41,7 @@ function workerPath(): string {
 class SpeakerDiarizationRuntime {
   private seq = 0;
   private pending = new Map<string, PendingDiarization>();
+  private scheduledWorkers = new Map<string, UtilityHost>();
 
   diarize(input: {
     audioFile: string;
@@ -50,11 +53,24 @@ class SpeakerDiarizationRuntime {
     id: string;
     result: Promise<{ segments: SpeakerDiarizationSegment[] }>;
   } {
+    const id = `sd${++this.seq}`;
+    if (schedulingRequired()) {
+      const { audioFile, ...parameters } = input;
+      return { id, result: scheduledAudio(audioFile, { profile: process.env.VSUB_PROFILE, runtime: 'sherpa-diarization', parameters }, () => this.diarizeNative(id, input), async () => {
+        const worker = this.scheduledWorkers.get(id);
+        const stopped = worker ? await worker.stopConfirmed() : true;
+        if (stopped) this.scheduledWorkers.delete(id);
+        return stopped;
+      }, () => this.cancel(id), {}, 'diarization/default', id) };
+    }
+    return { id, result: this.diarizeNative(id, input) };
+  }
+
+  private diarizeNative(id: string, input: { audioFile: string; segmentationModel: string; embeddingModel: string; numClusters?: number; numThreads?: number }): Promise<{ segments: SpeakerDiarizationSegment[] }> {
     if (!isSherpaLibInstalled()) {
       throw new Error('sherpa native lib not installed');
     }
 
-    const id = `sd${++this.seq}`;
     // fork / stderr 日志 / 退出分类 / Linux core 限制由共用底座处理（crash/utilityHost.ts）
     const child = spawnAppUtilityHost({
       workerFile: workerPath(),
@@ -62,6 +78,7 @@ class SpeakerDiarizationRuntime {
       logLabel: 'speaker diarization worker',
       env: buildSherpaWorkerEnv(getSherpaLibDir()),
     });
+    if (schedulingRequired()) this.scheduledWorkers.set(id, child);
     // 崩溃现场：请求结束（成功、失败、取消、进程退出）时移除
     const endContext = beginCrashContext({
       engine: 'speaker-diarization',
@@ -111,7 +128,7 @@ class SpeakerDiarizationRuntime {
     );
     result.then(endContext, endContext);
 
-    return { id, result };
+    return result;
   }
 
   private stop(id: string, code: 'cancelled' | 'disposed'): void {
@@ -126,6 +143,7 @@ class SpeakerDiarizationRuntime {
   }
 
   cancel(id: string): void {
+    cancelScheduled(id);
     this.stop(id, 'cancelled');
   }
 

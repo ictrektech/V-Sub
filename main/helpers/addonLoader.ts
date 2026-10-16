@@ -1,6 +1,8 @@
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
+import { schedulingRequired } from '../../vos/scheduler-client.mjs';
+import { scheduledWhisper } from './scheduledWhisper';
 import { store, logMessage } from './storeManager';
 import { getExtraResourcesPath, isAppleSilicon } from './utils';
 import {
@@ -256,6 +258,7 @@ function guardNativeCall(
 ): WhisperAsyncFn {
   const key = candidateKeyOf(candidate);
   return async (params) => {
+    if (schedulingRequired()) return scheduledWhisper(candidate.path, candidate.backend, params);
     const model =
       typeof params?.model === 'string' ? path.basename(params.model) : '';
     const end = beginNativeCall({
@@ -401,7 +404,7 @@ export async function loadBestAddon(
       });
       let whisper: WhisperFn;
       try {
-        whisper = tryLoadCandidate(candidate);
+        whisper = schedulingRequired() ? (() => { throw new Error('Scheduled Whisper must run in its worker'); }) : tryLoadCandidate(candidate);
       } finally {
         endLoad();
       }

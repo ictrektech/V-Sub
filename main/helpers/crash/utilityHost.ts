@@ -87,13 +87,15 @@ export function buildSherpaWorkerEnv(
   base: NodeJS.ProcessEnv = process.env,
   delimiter: string = path.delimiter,
 ): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...base,
     SHERPA_ONNX_LIB_DIR: libDir,
     // Windows DLL / Linux SO 依赖解析（macOS 靠 @loader_path 重写）。
     PATH: `${libDir}${delimiter}${base.PATH ?? ''}`,
     LD_LIBRARY_PATH: `${libDir}${delimiter}${base.LD_LIBRARY_PATH ?? ''}`,
   };
+  delete env.VSUB_SCHEDULER_WORKER_TOKEN;
+  return env;
 }
 
 function limitCoreWithPrlimit(pid: number): Promise<string | null> {
@@ -139,6 +141,7 @@ export class UtilityHost {
   private readonly options: SpawnHostOptions;
   private readonly proc: UtilityProcess;
   private killedByUs = false;
+  private exited = false;
   private stderrTail = '';
   private exitListeners: Array<(info: HostExitInfo) => void> = [];
 
@@ -183,6 +186,7 @@ export class UtilityHost {
     });
 
     this.proc.on('exit', (code) => {
+      this.exited = true;
       const classification = classifyExit({
         platform: deps.platform,
         exitCode: code,
@@ -226,6 +230,15 @@ export class UtilityHost {
 
   postMessage(message: unknown): void {
     this.proc.postMessage(message);
+  }
+
+  async stopConfirmed(timeoutMs = 10000): Promise<boolean> {
+    if (this.exited) return true;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), timeoutMs);
+      this.onExit(() => { clearTimeout(timer); resolve(true); });
+      this.kill();
+    });
   }
 
   /** 主动终止：先打标记并登记，再 kill。 */
