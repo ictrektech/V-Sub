@@ -35,7 +35,7 @@ test('aggregate discovery requires Scheduler application identity and never star
     assert.equal(response.status, 200);
     const value = await response.json();
     assert.deepEqual(value.models, []);
-    assert.deepEqual(value.capabilities, ['namespace-inference-v1']);
+    assert.deepEqual(value.capabilities, ['namespace-inference-v1', 'canonical-v-scheduler-v1']);
     assert.equal((await (await fetch(origin + '/health')).json()).workers, 0);
     assert.equal((await fetch(origin + '/api/v1/scheduler/discovery', { method: 'POST', headers: { Authorization: 'Bearer trusted' } })).status, 405);
   } finally {

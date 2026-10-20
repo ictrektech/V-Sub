@@ -7,7 +7,7 @@ let refreshed = 0;
 let asr: AsrProvider[] = [];
 let tts: TtsProvider[] = [];
 let error = '';
-export const routerBase = (process.env.V_ROUTER_URL || 'http://v-router:8080').replace(/\/$/, '');
+export const routerBase = (process.env.V_ROUTER_URL || 'http://v-scheduler:8080').replace(/\/$/, '');
 export const managed = (provider: { id?: string }) => provider.id?.startsWith('v-router:');
 export function routerHeaders() { return { Authorization: `Bearer ${accessToken}` }; }
 export function routerProviderHeaders(provider: { id?: string; apiUrl?: string; vosManaged?: boolean }) {

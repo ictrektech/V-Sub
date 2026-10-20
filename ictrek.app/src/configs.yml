@@ -3,7 +3,7 @@ configs:
     type: string
     title: {zh-CN: V-Router 地址, en: V-Router URL}
     description: {zh-CN: VOS 内统一模型网关，凭据通过账户授权取得。, en: Unified model gateway; credentials come from VOS account authorization.}
-    default: http://v-router:8080
+    default: http://v-scheduler:8080
   - name: VOS_OIDC_USERINFO_URL
     type: string
     title: {zh-CN: VOS 身份校验地址, en: VOS userinfo URL}
@@ -18,7 +18,7 @@ configs:
     type: string
     title: {zh-CN: Model Hub 地址, en: Model Hub API URL}
     description: {zh-CN: 本地公共模型由 Model Hub 统一从 ModelScope 下载和管理。, en: Model Hub manages public model downloads from ModelScope.}
-    default: http://v-scheduler-model-hub:6005
+    default: http://v-scheduler:6005
   - name: MODEL_HUB_SHARED_MODELS_PATH
     type: path
     title: {zh-CN: Model Hub 共享模型目录, en: Model Hub shared models directory}

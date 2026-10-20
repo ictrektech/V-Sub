@@ -105,3 +105,13 @@ test('worker restart rejects old generation until a matching new binding arrives
   const receipt = await state.broker.acquire(state.namespace, state.workerToken, state.body);
   await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
 });
+
+test('canonical migration preserves credentials and rejects arbitrary origins', async context => {
+  const state = await fixture(context);
+  const migrated = { ...state.config, binding_revision: 3, url: 'http://v-scheduler:8080/scheduler/api/v1' };
+  await state.broker.bind(migrated);
+  const stored = await state.broker.configuration();
+  assert.equal(stored.url, migrated.url);
+  assert.equal(stored.token, state.config.token);
+  await assert.rejects(state.broker.bind({ ...migrated, binding_revision: 4, url: 'http://other/scheduler/api/v1' }), error => error.status === 422);
+});

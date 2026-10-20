@@ -3,7 +3,8 @@ import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const appId = 'com.ictrek.v-sub';
-const schedulerUrl = 'http://v-router:8080/scheduler/api/v1';
+const schedulerUrl = 'http://v-scheduler:8080/scheduler/api/v1';
+const trustedScheduler = url => [schedulerUrl, 'http://v-router:8080/scheduler/api/v1', 'http://v-scheduler-gateway:8080/scheduler/api/v1'].includes(url);
 const equal = (left, right) => {
   const actual = Buffer.from(left || ''), expected = Buffer.from(right || '');
   return actual.length === expected.length && actual.length >= 32 && timingSafeEqual(actual, expected);
@@ -31,7 +32,7 @@ export class SchedulerBroker {
       const info = await fs.lstat(this.file);
       if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) || info.size > 262144) throw new Error();
       const config = JSON.parse(await fs.readFile(this.file, 'utf8'));
-      if (config.app_id !== appId || config.url !== schedulerUrl || typeof config.token !== 'string' || config.token.length < 32) throw new Error();
+      if (config.app_id !== appId || !trustedScheduler(config.url) || typeof config.token !== 'string' || config.token.length < 32) throw new Error();
       return config;
     } catch { throw new SchedulerError(503, 'V-Scheduler binding required'); }
   }
@@ -39,7 +40,7 @@ export class SchedulerBroker {
   async controller(config, method, endpoint, body, key) {
     let response;
     try {
-      response = await this.fetcher(schedulerUrl + endpoint, {
+      response = await this.fetcher(config.url + endpoint, {
         method, redirect: 'error', signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}`, ...(key ? { 'Idempotency-Key': key } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -83,7 +84,7 @@ export class SchedulerBroker {
   }
 
   async applyBinding(config) {
-    if (config?.protocol_version !== 1 || !Number.isSafeInteger(config.binding_revision) || config.binding_revision < 1 || config.app_id !== appId || config.url !== schedulerUrl || typeof config.token !== 'string' || config.token.length < 32 || config.token.length > 4096 || /\s/.test(config.token)) {
+    if (config?.protocol_version !== 1 || !Number.isSafeInteger(config.binding_revision) || config.binding_revision < 1 || config.app_id !== appId || !trustedScheduler(config.url) || typeof config.token !== 'string' || config.token.length < 32 || config.token.length > 4096 || /\s/.test(config.token)) {
       throw new SchedulerError(422, 'Invalid Scheduler binding');
     }
     const models = Object.entries(config.models || {});
