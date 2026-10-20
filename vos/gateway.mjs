@@ -14,7 +14,7 @@ const appRoot = path.resolve(process.env.VSUB_APP_ROOT || '.');
 const dataRoot = path.resolve(process.env.VSUB_DATA_DIR || '/data');
 const sessions = new Map();
 const workers = new Map();
-const routerURL = process.env.V_ROUTER_URL || 'http://v-router:8080';
+const routerURL = process.env.V_ROUTER_URL || 'http://v-scheduler:8080';
 const userinfoURL = process.env.VOS_OIDC_USERINFO_URL || 'http://host.docker.internal:8105/v1000/oauth2/userinfo';
 const scheduler = new SchedulerBroker({ dataRoot, workerForNamespace: namespace => workers.get(namespace) });
 const json = (res, code, value, headers = {}) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(value)); };
