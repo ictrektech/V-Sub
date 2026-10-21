@@ -8,10 +8,11 @@ let asr: AsrProvider[] = [];
 let tts: TtsProvider[] = [];
 let error = '';
 export const routerBase = (process.env.V_ROUTER_URL || 'http://v-scheduler:8080').replace(/\/$/, '');
+// Saved provider IDs keep the legacy v-router prefix for compatibility.
 export const managed = (provider: { id?: string }) => provider.id?.startsWith('v-router:');
 export function routerHeaders() { return { Authorization: `Bearer ${accessToken}` }; }
 export function routerProviderHeaders(provider: { id?: string; apiUrl?: string; vosManaged?: boolean }) {
-  if (!provider.vosManaged || !managed(provider) || provider.apiUrl !== `${routerBase}/v1`) throw new Error('Invalid V-Router provider');
+  if (!provider.vosManaged || !managed(provider) || provider.apiUrl !== `${routerBase}/v1`) throw new Error('Invalid V-Scheduler provider');
   return routerHeaders();
 }
 export function getRouterAsr() { return asr; }
@@ -23,17 +24,17 @@ export async function refreshRouter(token?: string, force = false) {
   refreshed = Date.now();
   try {
     const response = await fetch(`${routerBase}/api/v1/models`, { headers: routerHeaders(), signal: AbortSignal.timeout(8000) });
-    if (!response.ok) throw new Error(`V-Router HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`V-Scheduler HTTP ${response.status}`);
     const data = await response.json();
     const rows: any[] = data.models || data.data?.models || data.data || [];
-    if (!Array.isArray(rows)) throw new Error('Invalid V-Router model list');
+    if (!Array.isArray(rows)) throw new Error('Invalid V-Scheduler model list');
     const nextAsr: AsrProvider[] = [], nextTts: TtsProvider[] = [];
     await Promise.all(rows.map(async row => {
       const model = row.qualified || row.id;
       // Our original local models already appear in the native engine selector.
       if (!model || model.includes('v-sub-')) return;
       const undeclared = (!row.kind || row.kind === 'unknown') && !(row.capabilities || []).length && !(row.endpoints || []).length;
-      const common = { vosUndeclared: undeclared, id: `v-router:${model}`, name: `V-Router · ${model}${undeclared ? ' (?)' : ''}`, type: 'openaiCompatible', apiUrl: `${routerBase}/v1`, apiKey: 'vos-session', vosManaged: true, requestTimeoutSec: 300, concurrency: 2 };
+      const common = { vosUndeclared: undeclared, id: `v-router:${model}`, name: `V-Scheduler · ${model}${undeclared ? ' (?)' : ''}`, type: 'openaiCompatible', apiUrl: `${routerBase}/v1`, apiKey: 'vos-session', vosManaged: true, requestTimeoutSec: 300, concurrency: 2 };
       if (modelCapabilities(row).asr) nextAsr.push({ ...common, models: model });
       if (modelCapabilities(row).tts) {
         let voices: string[] = []; let voiceLabels: Record<string, string> = {};

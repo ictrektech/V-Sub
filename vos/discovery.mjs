@@ -1,5 +1,5 @@
 // Discovery is authenticated per VOS user. Never enumerate another user's worker
-// or start a heavyweight runtime merely because V-Router probes the service.
+// or start a heavyweight runtime merely because V-Scheduler probes the service.
 export async function discoverLocalModels(user, pending) {
   const empty = { service_id: 'v-sub', name: 'V-Sub local models', owner: user.subject, visibility: 'private', protocol: 'openai', models: [] };
   if (!pending) return empty;

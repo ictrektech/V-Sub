@@ -1,6 +1,6 @@
 # V-Sub
 
-VOS adaptation of SmartSub: browser subtitle and dubbing workbench, account-isolated storage, automatic V-Router ASR/TTS access and private discovery of installed local models. Install the unified V-Scheduler application for its model gateway; legacy `v-router` endpoints remain compatible. See [VOS delivery](ictrek.app/README.md). Upstream desktop functionality remains available.
+VOS adaptation of SmartSub: browser subtitle and dubbing workbench, account-isolated storage, automatic V-Scheduler ASR/TTS access and private discovery of installed local models. Install the unified V-Scheduler application for its model gateway; legacy `v-router` endpoints remain compatible. See [VOS delivery](ictrek.app/README.md). Upstream desktop functionality remains available.
 
 <div align="center">
 
@@ -459,9 +459,9 @@ Run `scripts/publish-modelhub-models.py --keys <protected-json> --work-dir ~/dev
 
 Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/export` read-only, rather than the restricted storage root. A completed model with inaccessible or missing files is reported as a mount/permission error and never triggers a full forced re-download. Existing downloaded weights are reused after updating the package.
 
-### V-Router 主动发现本地模型
+### V-Scheduler 主动发现本地模型
 
-`GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Router 使用这一发现快照。V-Sub 不再向 V-Router 主动注册、续期或注销模型；后台仅每 30 秒刷新自身模型目录，且不依赖 V-Router 登录状态。
+`GET /api/v1/discovery` 接受 `Authorization: Bearer <VOS access_token>`，向 VOS userinfo 校验后只返回该用户已启动运行时的就绪模型、private 范围和内部推理路由凭证。无有效身份返回 401，运行时尚未启动时返回空模型列表，不会为发现启动运行时或下载模型。响应禁止缓存；内部推理凭证不应输出到日志或公开前端。V-Scheduler 使用这一发现快照。V-Sub 不再向 V-Scheduler 主动注册、续期或注销模型；后台仅每 30 秒刷新自身模型目录，且不依赖 V-Scheduler 登录状态。
 
 VOS 发布标签 `vos-v-sub-v*` 仅触发 VOS 打包流程，桌面构建流程排除 `vos-*` 标签。
 

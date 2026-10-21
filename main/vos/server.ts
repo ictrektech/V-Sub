@@ -7,7 +7,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { app, dialog, shell } from 'electron';
 import { invokeHandler, sendHandler } from '../automation/handlers';
 import { automationEvents, createServiceEvent } from '../automation/events';
-import { refreshRouter, routerStatus } from './router';
+import { refreshRouter, routerBase, routerStatus } from './router';
 import { startLocalModelRefresh, handleLocalInference, localModelStatus } from './localModels';
 import { withSchedulerHeaders } from '../../vos/scheduler-client.mjs';
 
@@ -79,7 +79,7 @@ export async function startWebServer() {
       if (channel === 'sync-title-bar-overlay' || channel === 'window-chrome:getState') { reply(200, { result: null }); return; }
       // Browser operations reuse the exact desktop handlers. OS UID and data roots isolate native IO.
       if (channel === 'vos:router-status') { reply(200, { result: { ...routerStatus(), local: localModelStatus() } }); return; }
-      if (channel === 'vos:runtime-status') { reply(200, { result: { profile: process.env.VSUB_PROFILE || 'cpu', sherpaProvider: process.env.VSUB_SHERPA_PROVIDER || 'cpu', sherpaVersion: process.env.VSUB_SHERPA_VERSION || '1.13.2' } }); return; }
+      if (channel === 'vos:runtime-status') { reply(200, { result: { appId: 'com.ictrek.v-sub', version: process.env.APP_VERSION || app.getVersion(), profile: process.env.VSUB_PROFILE || 'cpu', sherpaProvider: process.env.VSUB_SHERPA_PROVIDER || 'cpu', sherpaVersion: process.env.VSUB_SHERPA_VERSION || '1.13.2', gateway: routerBase } }); return; }
       const deletion: Record<string, string> = { deleteModel: 'ggml', deleteCt2Model: 'ct2', deleteFunasrModel: 'funasr', deleteQwenModel: 'qwen', deleteFireRedModel: 'firered', deleteParakeetModel: 'parakeet', deleteTtsModel: 'tts', deleteSpeakerDiarizationModel: 'diarization' };
       if (deletion[channel]) detachHubModel(deletion[channel], channel === 'deleteSpeakerDiarizationModel' ? 'default' : String(args[0]).toLowerCase());
       await syncHubModels().catch(() => {});

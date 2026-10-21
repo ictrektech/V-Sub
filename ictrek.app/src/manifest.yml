@@ -1,9 +1,9 @@
 id: com.ictrek.v-sub
 name: {zh-CN: V-Sub 字幕工作台, zh-TW: V-Sub 字幕工作臺, en: V-Sub Subtitle Studio}
 description:
-  zh-CN: 字幕转写、翻译、校对、配音与视频导出，自动接入 V-Router，支持原有本地模型。
-  zh-TW: 字幕轉寫、翻譯、校對、配音與影片匯出，自動接入 V-Router，支援原有本機模型。
-  en: Subtitle transcription, translation, proofreading, dubbing and video export with V-Router and native local models.
+  zh-CN: 字幕转写、翻译、校对、配音与视频导出，自动接入 V-Scheduler，支持原有本地模型。
+  zh-TW: 字幕轉寫、翻譯、校對、配音與影片匯出，自動接入 V-Scheduler，支援原有本機模型。
+  en: Subtitle transcription, translation, proofreading, dubbing and video export with V-Scheduler and native local models.
 version: __APP_VERSION__
 author: ictrek
 category: [ai, media]

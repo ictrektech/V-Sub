@@ -1,8 +1,8 @@
 configs:
   - name: V_ROUTER_URL
     type: string
-    title: {zh-CN: V-Router 地址, en: V-Router URL}
-    description: {zh-CN: VOS 内统一模型网关，凭据通过账户授权取得。, en: Unified model gateway; credentials come from VOS account authorization.}
+    title: {zh-CN: 统一模型网关地址, en: Unified model gateway URL}
+    description: {zh-CN: V-Scheduler 提供的 VOS 内统一模型网关；凭据通过账户授权取得。, en: Unified model gateway provided by V-Scheduler; credentials come from VOS account authorization.}
     default: http://v-scheduler:8080
   - name: VOS_OIDC_USERINFO_URL
     type: string
