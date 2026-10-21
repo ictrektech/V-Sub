@@ -47,8 +47,9 @@ if [[ "$build" == true ]]; then
       --build-arg "BASE_IMAGE=$base_image" --build-arg "WORKBENCH_IMAGE=$workbench" --build-arg "PROFILE=$profile" \
       -f docker/Dockerfile.app -t "$image" .
   elif [[ "$gateway_only" == true ]]; then
-    docker image inspect "$image" >/dev/null
-    docker buildx build --builder default --load --provenance=false --sbom=false --build-arg "BASE_IMAGE=$image" -f docker/Dockerfile.gateway -t "$image" .
+    base_image="${BASE_IMAGE:-$image}"
+    docker image inspect "$base_image" >/dev/null
+    docker buildx build --builder default --load --provenance=false --sbom=false --build-arg "BASE_IMAGE=$base_image" -f docker/Dockerfile.gateway -t "$image" .
   elif [[ "$gpu" == false ]]; then
     docker buildx build --builder default --load --target runtime-base --provenance=false --sbom=false \
       --build-arg "NODE_IMAGE=${registry}/node:24-bookworm-slim-${arch}" \

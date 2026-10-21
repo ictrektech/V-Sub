@@ -487,3 +487,11 @@ VOS 安装依赖统一应用 `com.ictrek.v-scheduler`，打包时从已发布的
 共享模型目录继续使用 `MODEL_HUB_SHARED_MODELS_PATH`（默认 `/data/vos_workspace/model_hub`），保留现有模型、导出路径和下载记录。统一模型网关仍使用 `http://v-scheduler:8080/v1`；资源调度接口为 `http://v-scheduler:8080/scheduler/api/v1`。接入及资源授权契约见 [V-Scheduler 接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md)。模型目录可见不代表本地推理已获调度授权。
 
 新安装默认使用 `v-scheduler`；原 `v-router`、模型目录及已保存的 provider ID 继续兼容，显式安装地址不会被覆盖。
+
+## 应用生命周期与资源停止
+
+VOS 安装后，应用通过 Scheduler 的可信绑定获得 `lifecycle_protocol_version=1`，自动登记已批准的执行器并定时上报应用心跳；节点遥测仍由 V-Scheduler 的内置组件采集，不需要用户安装 Agent。正式入口为 `http://v-scheduler:38120/api/v1`，兼容别名继续可用。模型目录、原有安装参数和模型下载方式不变。
+
+在 V-Scheduler「节点管理 → 应用统一接入」可查看实际节点、批准预算和运行中的执行。同步计算使用「停止并卸载」，异步任务使用「取消」；停止请求本身不释放预算。应用确认原生调用/子进程退出并卸载权重后才提交原执行的停止证明。未知执行或确认失败继续保留预约，避免把仍在运行的计算当成空闲；确认回执保存在应用私有目录，可在重启后重试。阻塞式原生调用须等待其实际返回，不能承诺立即中断。
+
+完整流程、身份和接口见 [V-Scheduler 统一接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md#unified-lifecycle)。

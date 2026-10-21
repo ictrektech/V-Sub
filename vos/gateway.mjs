@@ -182,4 +182,4 @@ const server = http.createServer(async (req, res) => {
 await mkdir(path.join(dataRoot, 'users'), { recursive: true, mode: 0o711 });
 await chmod(dataRoot, 0o711); await chmod(path.join(dataRoot, 'users'), 0o711);
 server.listen(Number(process.env.PORT || 7090), '0.0.0.0');
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { for (const promise of workers.values()) promise.then(worker => worker.child.kill()); server.close(); setTimeout(() => process.exit(0), 3000).unref(); });
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { scheduler.lifecycle.close(); for (const promise of workers.values()) promise.then(worker => worker.child.kill()); server.close(); setTimeout(() => process.exit(0), 3000).unref(); });

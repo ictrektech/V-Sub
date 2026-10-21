@@ -36,5 +36,5 @@ export async function discoverSchedulerModels(workers, fetcher = fetch) {
       if (models.length > 512) throw new Error('Private model catalog exceeds binding capacity');
     }
   }
-  return { protocol_version: 1, app_id: 'com.ictrek.v-sub', capabilities: ['namespace-inference-v1', 'canonical-v-scheduler-v1'], binding_endpoint: '/api/v1/scheduler/binding', models };
+  return { protocol_version: 1, app_id: 'com.ictrek.v-sub', lifecycle_protocol_version: 1, capabilities: ['namespace-inference-v1', 'canonical-v-scheduler-v1'], binding_endpoint: '/api/v1/scheduler/binding', models };
 }

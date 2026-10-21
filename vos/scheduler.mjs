@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { ApplicationLifecycle } from './scheduler-lifecycle.mjs';
 import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
@@ -25,6 +26,10 @@ export class SchedulerBroker {
     this.bindingQueue = Promise.resolve();
     this.bindingBusy = false;
     this.pendingAcquisitions = 0;
+    this.lifecycle = new ApplicationLifecycle({ configuration: () => this.configuration(),
+      controller: (...args) => this.controller(...args), file: path.join(dataRoot, 'scheduler.lifecycle.json'),
+      executionFor: permit => [...this.executions.values()].find(execution => execution.permit === permit) });
+    if (process.env.VSUB_SCHEDULER_REQUIRED === 'true') this.lifecycle.start();
   }
 
   async configuration() {
@@ -124,6 +129,7 @@ export class SchedulerBroker {
 
   async acquirePermit(namespace, body) {
     const config = await this.configuration();
+    await this.lifecycle.ensure(config);
     const upstream = await this.model(config, namespace, body.model);
     if (canonical(body.execution_settings) !== canonical(config.model_execution_settings[body.model])) throw new SchedulerError(422, 'Runtime settings are not calibrated');
     if (canonical(Object.keys(body.inputs || {}).sort()) !== canonical(Object.keys(config.model_limits?.[body.model] || {}).sort())) throw new SchedulerError(422, 'Complete calibrated input metrics required');
@@ -143,9 +149,11 @@ export class SchedulerBroker {
       execution.permit = permit.permit_id;
     }
     if (!execution.permit) throw new SchedulerError(503, 'Missing admission receipt');
-    try { await this.verify(execution, true); }
+    await this.lifecycle.attach(execution);
+    try { await this.verify(execution, true); await this.lifecycle.claimed(execution); }
     catch (error) {
-      if (execution.owned) await this.controller(config, 'POST', `/permits/${execution.permit}/release`, { stopped: true, evidence: 'worker_not_started' }).catch(() => {});
+      await this.lifecycle.finished(execution, true);
+      if (execution.owned) await this.controller(config, 'POST', `/permits/${execution.permit}/release`, { stopped: true, evidence: 'worker_not_started' }).then(() => this.lifecycle.released(execution.permit)).catch(() => {});
       throw error;
     }
     this.executions.set(id, execution);
@@ -179,7 +187,13 @@ export class SchedulerBroker {
     }
     if (operation !== 'release') throw new SchedulerError(404, 'Operation not found');
     clearInterval(execution.timer);
-    if (execution.owned) await this.controller(execution.config, 'POST', `/permits/${execution.permit}/release`, { stopped: body.stopped === true, evidence: body.stopped === true ? 'private_worker_confirmed_native_runtime_exit' : 'private_worker_stop_not_confirmed' });
+    await this.lifecycle.finished(execution, body.stopped === true);
+    if (execution.owned) {
+      try {
+        await this.controller(execution.config, 'POST', `/permits/${execution.permit}/release`, { stopped: body.stopped === true, evidence: body.stopped === true ? 'private_worker_confirmed_native_runtime_exit' : 'private_worker_stop_not_confirmed' });
+        if (body.stopped === true && execution.config.lifecycle_protocol_version === 1) await this.lifecycle.released(execution.permit);
+      } catch (error) { if (execution.config.lifecycle_protocol_version !== 1) throw error; }
+    }
     this.executions.delete(execution.id);
     return { acknowledged: true, stopped: body.stopped === true };
   }
