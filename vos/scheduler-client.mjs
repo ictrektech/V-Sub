@@ -1,3 +1,4 @@
+import { schedulingOptions } from './scheduling-options.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const headersContext = new AsyncLocalStorage();
@@ -45,7 +46,8 @@ async function execute(options) {
   const model = `v-sub-${namespace.slice(0, 12)}/${options.model}`;
   const headers = headersContext.getStore() || {};
   const gateway = { permit_id: headers['x-vscheduler-permit-id'] || '', execution_token: headers['x-vscheduler-execution-token'] || '', executor_id: headers['x-vscheduler-executor-id'] || '' };
-  const receipt = await broker('acquire', { model, execution_settings: options.executionSettings, inputs: options.inputs, gateway });
+  const scheduling = schedulingOptions(headers);
+  const receipt = await broker('acquire', { model, execution_settings: options.executionSettings, inputs: options.inputs, gateway, ...(Object.keys(scheduling).length ? { scheduling } : {}), ...(scheduling.force_admission ? { operator_authorization: headers.authorization || '' } : {}) });
   let failed = false, checking = false;
   const timer = setInterval(async () => {
     if (checking || failed) return;

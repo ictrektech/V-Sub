@@ -42,12 +42,12 @@ export class SchedulerBroker {
     } catch { throw new SchedulerError(503, 'V-Scheduler binding required'); }
   }
 
-  async controller(config, method, endpoint, body, key) {
+  async controller(config, method, endpoint, body, key, operator = '') {
     let response;
     try {
       response = await this.fetcher(config.url + endpoint, {
         method, redirect: 'error', signal: AbortSignal.timeout(8000),
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}`, ...(key ? { 'Idempotency-Key': key } : {}) },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}`, ...(key ? { 'Idempotency-Key': key } : {}), ...(operator ? { 'X-VScheduler-Admin-Authorization': operator } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       if (response.status === 429) throw new SchedulerError(429, 'Compute resources busy');
@@ -145,7 +145,7 @@ export class SchedulerBroker {
       if (!inherited.permit_id || typeof inherited.execution_token !== 'string' || inherited.execution_token.length < 32 || inherited.executor_id !== config.gateway_executors?.[body.model]) throw new SchedulerError(503, 'Invalid gateway admission proof');
       Object.assign(execution, { permit: inherited.permit_id, proof: inherited.execution_token, executor: inherited.executor_id, owned: false });
     } else {
-      const permit = await this.controller(config, 'POST', '/permits', { executor_id: execution.executor, model_id: body.model, upstream_url: upstream, execution_token: execution.proof }, id);
+      const permit = await this.controller(config, 'POST', '/permits', { executor_id: execution.executor, model_id: body.model, upstream_url: upstream, execution_token: execution.proof, ...(body.scheduling ? { scheduling: body.scheduling } : {}) }, id, body.scheduling?.force_admission ? body.operator_authorization || '' : '');
       execution.permit = permit.permit_id;
     }
     if (!execution.permit) throw new SchedulerError(503, 'Missing admission receipt');

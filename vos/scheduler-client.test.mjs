@@ -60,3 +60,13 @@ test('native calls serialize and cannot nest an unapproved second model', async 
   assert.equal(state.calls.filter(call => call.operation === 'acquire').length, 1);
   assert.equal(state.calls.at(-1).body.stopped, true);
 });
+
+
+test('task scheduling options are carried to broker and invalid values never execute', async context => {
+  const state = fixture(context);
+  await withSchedulerHeaders({ 'x-vscheduler-priority': 'high', 'x-vscheduler-preemptible': 'true', 'x-vscheduler-allow-preemption': 'true' }, () => scheduledCompute(state.options));
+  assert.deepEqual(state.calls[0].body.scheduling, { priority: 'high', preemptible: true, allow_preemption: true });
+  state.calls.length = 0;
+  await assert.rejects(withSchedulerHeaders({ 'x-vscheduler-preemptible': '1' }, () => scheduledCompute(state.options)), error => error.status === 422);
+  assert.equal(state.calls.length, 0);
+});

@@ -495,3 +495,17 @@ VOS 安装后，应用通过 Scheduler 的可信绑定获得 `lifecycle_protocol
 在 V-Scheduler「节点管理 → 应用统一接入」可查看实际节点、批准预算和运行中的执行。同步计算使用「停止并卸载」，异步任务使用「取消」；停止请求本身不释放预算。应用确认原生调用/子进程退出并卸载权重后才提交原执行的停止证明。未知执行或确认失败继续保留预约，避免把仍在运行的计算当成空闲；确认回执保存在应用私有目录，可在重启后重试。阻塞式原生调用须等待其实际返回，不能承诺立即中断。
 
 完整流程、身份和接口见 [V-Scheduler 统一接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md#unified-lifecycle)。
+
+
+### 任务优先级与协作让出
+
+向本应用的推理接口发送请求时，可选传入以下请求头：
+`X-VScheduler-Priority: background|interactive|high`、
+`X-VScheduler-Preemptible: true|false`、
+`X-VScheduler-Allow-Preemption: true|false`、
+`X-VScheduler-Force-Admission: true|false`。
+默认后台优先级，三个开关均关闭。抢占需要当前任务同意让出且新任务允许抢占；
+原生执行退出、模型卸载确认前仍占用预算。同步调用停止后由调用方决定是否重新提交，
+不会自动重放。强制尝试须携带当前管理员的 Bearer 身份，由 V-Scheduler 核验，
+不突破批准预算、停止屏障或至少 1 GiB 内存余量；凭证不写入任务。
+完整流程见 [V-Scheduler 统一接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md)。
