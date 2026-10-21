@@ -11,6 +11,14 @@ test('aggregate discovery requires Scheduler application identity and never star
   const identity = http.createServer((request, response) => {
     const token = request.headers.authorization;
     response.setHeader('Content-Type', 'application/json');
+    if (token?.startsWith('Bearer legacy-')) {
+      if (request.url === '/v1000/user/check') {
+        response.end(JSON.stringify({ code: token === 'Bearer legacy-expired' ? 10001 : 0, data: { id: 'context-user', username: token === 'Bearer legacy-admin' ? 'admin' : 'com.ictrek.v-scheduler', role_code: 'system_admin', enable: token === 'Bearer legacy-disabled' ? 0 : 1, delete: 0 } }));
+      } else {
+        response.statusCode = 401; response.end(JSON.stringify({ error: 'invalid_token' }));
+      }
+      return;
+    }
     response.end(JSON.stringify({ sub: token === 'Bearer trusted' || token === 'Bearer disabled' ? 'com.ictrek.v-scheduler' : 'admin', enable: token === 'Bearer disabled' ? 0 : 1 }));
   });
   identity.listen(0, '127.0.0.1'); await once(identity, 'listening');
@@ -31,6 +39,10 @@ test('aggregate discovery requires Scheduler application identity and never star
       const response = await fetch(origin + '/api/v1/scheduler/discovery', { headers: { Authorization: 'Bearer ' + token } });
       assert.equal(response.status, 403);
     }
+    for (const token of ['legacy-admin', 'legacy-disabled', 'legacy-expired']) {
+      assert.equal((await fetch(origin + '/api/v1/scheduler/discovery', { headers: { Authorization: 'Bearer ' + token } })).status, 401);
+    }
+    assert.equal((await fetch(origin + '/api/v1/scheduler/discovery', { headers: { Authorization: 'Bearer legacy-scheduler' } })).status, 200);
     const response = await fetch(origin + '/api/v1/scheduler/discovery', { headers: { Authorization: 'Bearer trusted' } });
     assert.equal(response.status, 200);
     const value = await response.json();

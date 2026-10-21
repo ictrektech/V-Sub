@@ -105,8 +105,17 @@ const server = http.createServer(async (req, res) => {
       let identity;
       try {
         const response = await fetch(userinfoURL, { headers: { Authorization: req.headers.authorization || '' }, redirect: 'error', signal: AbortSignal.timeout(8000) });
-        if (!response.ok) throw new Error();
-        identity = await response.json();
+        if (response.status === 401 && (await response.json()).error === 'invalid_token') {
+          const target = new URL('/v1000/user/check', userinfoURL);
+          const checked = await fetch(target, { headers: { Authorization: req.headers.authorization || '' }, redirect: 'error', signal: AbortSignal.timeout(8000) });
+          if (!checked.ok) throw new Error();
+          const verified = await checked.json(), user = verified.data;
+          if (verified.code !== 0 || user?.username !== 'com.ictrek.v-scheduler' || user.role_code !== 'system_admin' || user.enable !== 1 || user.delete !== 0 || !user.id) throw new Error();
+          identity = { sub: user.username, enable: user.enable };
+        } else {
+          if (!response.ok) throw new Error();
+          identity = await response.json();
+        }
       } catch { throw new SchedulerError(401, 'VOS application identity required'); }
       if (identity.sub !== 'com.ictrek.v-scheduler' || identity.enable !== 1) throw new SchedulerError(403, 'V-Scheduler application identity required');
       if (pathname === '/api/v1/scheduler/discovery') {

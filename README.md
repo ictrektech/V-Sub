@@ -509,3 +509,5 @@ VOS 安装后，应用通过 Scheduler 的可信绑定获得 `lifecycle_protocol
 不会自动重放。强制尝试须携带当前管理员的 Bearer 身份，由 V-Scheduler 核验，
 不突破批准预算、停止屏障或至少 1 GiB 内存余量；凭证不写入任务。
 完整流程见 [V-Scheduler 统一接入指南](https://github.com/ictrektech/V-Scheduler/blob/main/docs/application-integration.md)。
+
+自动接入同时兼容新版 VOS 身份接口和旧版 VOS 的 `user/check` 应用身份核验；只接受 V-Scheduler 的精确已启用服务身份，普通用户及其他应用不能交接授权。用户无需手工配置服务令牌，既有共享目录和兼容地址继续保留。
