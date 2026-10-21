@@ -11,3 +11,13 @@ export function schedulingOptions(headers) {
   }
   return result;
 }
+
+// Copy only validated scheduling intent across the root-to-worker proxy.
+export function forwardedSchedulingHeaders(headers) {
+  const options = schedulingOptions(headers);
+  const result = {};
+  for (const [field, header] of Object.entries({ priority: 'x-vscheduler-priority', preemptible: 'x-vscheduler-preemptible', allow_preemption: 'x-vscheduler-allow-preemption', force_admission: 'x-vscheduler-force-admission' })) {
+    if (options[field] !== undefined) result[header] = String(options[field]);
+  }
+  return result;
+}

@@ -84,7 +84,8 @@ export async function startWebServer() {
       if (deletion[channel]) detachHubModel(deletion[channel], channel === 'deleteSpeakerDiarizationModel' ? 'default' : String(args[0]).toLowerCase());
       await syncHubModels().catch(() => {});
       const event = browserEvent(clientId); const context = { saved: [] as string[] };
-      const result = await contexts.run(context, async () => mode === 'send' ? sendHandler(channel, event, ...args) : invokeHandler(channel, event, ...args));
+      const schedulingHeaders = { ...req.headers, ...(req.headers['x-vsub-access-token'] ? { authorization: `Bearer ${String(req.headers['x-vsub-access-token'])}` } : {}) };
+      const result = await withSchedulerHeaders(schedulingHeaders, () => contexts.run(context, async () => mode === 'send' ? sendHandler(channel, event, ...args) : invokeHandler(channel, event, ...args)));
       reply(200, { result: result ?? null, downloads: context.saved.filter(file => fs.existsSync(file)) });
     } catch (error) { reply(Number((error as any)?.status) || 400, { error: error instanceof Error ? error.message : 'Operation failed' }); }
   });

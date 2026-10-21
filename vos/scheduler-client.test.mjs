@@ -70,3 +70,10 @@ test('task scheduling options are carried to broker and invalid values never exe
   await assert.rejects(withSchedulerHeaders({ 'x-vscheduler-preemptible': '1' }, () => scheduledCompute(state.options)), error => error.status === 422);
   assert.equal(state.calls.length, 0);
 });
+
+
+test('root proxy carries only scheduling intent, never copies caller credentials', async () => {
+  const { forwardedSchedulingHeaders } = await import('./scheduling-options.mjs');
+  assert.deepEqual(forwardedSchedulingHeaders({ authorization: 'Bearer synthetic', 'x-vscheduler-priority': 'high', 'x-vscheduler-allow-preemption': 'true' }), { 'x-vscheduler-priority': 'high', 'x-vscheduler-allow-preemption': 'true' });
+  assert.throws(() => forwardedSchedulingHeaders({ 'x-vscheduler-force-admission': '1' }), error => error.status === 422);
+});

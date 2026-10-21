@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { forwardedSchedulingHeaders } from './scheduling-options.mjs';
 import { discoverLocalModels, discoverSchedulerModels } from './discovery.mjs';
 import { SchedulerBroker, SchedulerError } from './scheduler.mjs';
 import fs from 'node:fs';
@@ -148,7 +149,7 @@ const server = http.createServer(async (req, res) => {
       const worker = await pending;
       if (req.headers.authorization !== `Bearer ${worker.token}`) { json(res, 401, { error: 'Inference authentication required' }); return; }
       const admission = Object.fromEntries(['x-vscheduler-permit-id', 'x-vscheduler-execution-token', 'x-vscheduler-executor-id'].filter(name => typeof req.headers[name] === 'string').map(name => [name, req.headers[name]]));
-      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: inference[2] + url.search, method: req.method, headers: { ...admission, 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}` } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
+      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: inference[2] + url.search, method: req.method, headers: { ...forwardedSchedulingHeaders(req.headers), ...admission, 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}` } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
       proxy.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'Local inference unavailable' }); else res.destroy(); });
       req.pipe(proxy); return;
     }
@@ -167,7 +168,7 @@ const server = http.createServer(async (req, res) => {
         json(res, 200, { path: dest }); return;
       }
       if (pathname === '/media') { const file = await existingFile(worker.root, url.searchParams.get('path') || ''); await serveFile(req, res, file, url.searchParams.has('download')); return; }
-      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: pathname + url.search, method: req.method, headers: { 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}`, 'X-VSub-Access-Token': found.accessToken } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
+      const proxy = http.request({ host: '127.0.0.1', port: worker.port, path: pathname + url.search, method: req.method, headers: { ...forwardedSchedulingHeaders(req.headers), 'Content-Type': req.headers['content-type'] || 'application/json', Authorization: `Bearer ${worker.token}`, 'X-VSub-Access-Token': found.accessToken } }, upstream => { res.writeHead(upstream.statusCode || 502, upstream.headers); upstream.pipe(res); });
       proxy.on('error', () => { if (!res.headersSent) json(res, 502, { error: 'Subtitle runtime unavailable' }); else res.destroy(); });
       res.on('close', () => proxy.destroy()); req.pipe(proxy); return;
     }
