@@ -1,7 +1,9 @@
 {
   "repository": "ictrektech/v-sub-addons",
-  "ref": "whisper-1.9.5-vsub-1",
-  "baseUrl": "https://media.githubusercontent.com/media/ictrektech/v-sub-addons",
+  "tag": "whisper-1.9.5-vsub-1",
+  "releaseBaseUrl": "https://github.com/ictrektech/v-sub-addons/releases/download",
+  "lfsBaseUrl": "https://media.githubusercontent.com/media/ictrektech/v-sub-addons",
+  "mirrors": ["https://ghfast.top/", "https://gh-proxy.com/", ""],
   "profiles": {
     "thor": {
       "file": "thor.node",

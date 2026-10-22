@@ -92,20 +92,31 @@ PY
     rm -rf "$whisper_context"
     mkdir -p "$whisper_context"
     if [[ -n "$whisper_addon" ]]; then
-      read -r addon_url addon_sha < <(python3 - "$whisper_addon" <<'PY'
+      mapfile -t addon_urls < <(python3 - "$whisper_addon" <<'PY'
 import json, sys
 manifest = json.load(open('docker/whisper-cuda/manifest.json'))
 entry = manifest['profiles'][sys.argv[1]]
-print(manifest['baseUrl'].rstrip('/') + '/' + manifest['ref'] + '/' + entry['file'], entry['sha256'])
+release = manifest['releaseBaseUrl'].rstrip('/') + '/' + manifest['tag'] + '/' + entry['file']
+print(entry['sha256'])
+for mirror in manifest['mirrors']:
+    print((mirror.rstrip('/') + '/' if mirror else '') + release)
+print(manifest['lfsBaseUrl'].rstrip('/') + '/' + manifest['tag'] + '/' + entry['file'])
 PY
 )
+      addon_sha="${addon_urls[0]}"
       addon_cache="${HOME}/dev/build/v-sub/whisper-cuda"
-      addon_path="$addon_cache/${addon_url##*/}"
+      addon_path="$addon_cache/${addon_urls[1]##*/}"
       mkdir -p "$addon_cache"
       if [[ ! -s "$addon_path" || "$(sha256sum "$addon_path" | awk '{print $1}')" != "$addon_sha" ]]; then
-        rm -f "$addon_path"
-        curl -fsSL --connect-timeout 10 --max-time 900 --retry 2 "$addon_url" -o "$addon_path.part" \
-          || { rm -f "$addon_path.part"; echo "Cannot fetch CUDA addon: $addon_url" >&2; exit 1; }
+        rm -f "$addon_path" "$addon_path.part"
+        for candidate in "${addon_urls[@]:1}"; do
+          if curl -fsSL --connect-timeout 10 --max-time 900 --retry 1 "$candidate" -o "$addon_path.part"; then
+            echo "Fetched CUDA addon via $candidate"
+            break
+          fi
+          rm -f "$addon_path.part"
+        done
+        [[ -s "$addon_path.part" ]] || { echo "Cannot fetch CUDA addon for profile $whisper_addon" >&2; exit 1; }
         mv "$addon_path.part" "$addon_path"
       fi
       [[ "$(sha256sum "$addon_path" | awk '{print $1}')" == "$addon_sha" ]] || { echo "CUDA addon checksum mismatch: $addon_path" >&2; exit 1; }
