@@ -257,6 +257,8 @@
     "statusRunningGpu": "GPU Acceleration Active · {{backend}}",
     "statusFallback": "Automatically switched to {{backend}}",
     "statusCpu": "CPU Mode",
+    "statusCpuNoDownload": "CPU Mode (no downloadable pack for this platform)",
+    "statusBuiltinCudaReady": "CUDA acceleration bundled · enabled on first transcription",
     "statusCpuManual": "CPU Mode (manual)",
     "statusAutoReady": "Ready · acceleration method will be chosen on first transcription run",
     "statusGpuOnlyPending": "GPU-only mode · awaiting first transcription to load acceleration pack",
@@ -320,7 +322,9 @@
       "cudaVersionTooOld": "GPU driver supports a CUDA version too old for any available pack",
       "maxCudaUnknown": "Could not parse driver CUDA version — recommending highest available pack",
       "toolkitInstalled": "CUDA Toolkit detected locally — lite pack recommended",
-      "toolkitMissing": "No CUDA Toolkit detected — full pack recommended (bundled runtime)"
+      "toolkitMissing": "No CUDA Toolkit detected — full pack recommended (bundled runtime)",
+      "cudaAddonUnavailable": "No downloadable whisper.cpp CUDA pack for this platform; acceleration is provided by the addon bundled with the build",
+      "builtinCuda": "CUDA acceleration is provided by the whisper.cpp addon bundled with this image; no download is required"
     },
     "vosSherpaTitle": "sherpa-onnx · Bundled VOS runtime",
     "vosSherpaCuda": "{{profile}} · sherpa-onnx {{version}} · CUDA configured; runtime libraries are included in the image.",

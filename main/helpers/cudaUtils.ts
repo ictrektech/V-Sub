@@ -296,6 +296,27 @@ function getAddonRecommendation(
     gpuSupport.maxCudaVersion ||
     AVAILABLE_CUDA_VERSIONS[AVAILABLE_CUDA_VERSIONS.length - 1];
 
+  if (!canDownloadCudaAddon()) {
+    if (fs.existsSync(getBuiltinCudaAddonPath())) {
+      return {
+        canUseCuda: true,
+        recommendedVersion: null,
+        needsDlls: false,
+        downloadType: null,
+        reason: `当前平台 (${process.arch}) 使用随镜像构建的 whisper.cpp CUDA 插件`,
+        reasonKey: 'builtinCuda',
+      };
+    }
+    return {
+      canUseCuda: false,
+      recommendedVersion: null,
+      needsDlls: false,
+      downloadType: null,
+      reason: `当前平台架构 (${process.arch}) 没有可下载的 whisper.cpp CUDA 加速包；GPU 加速由随镜像构建的插件提供`,
+      reasonKey: 'cudaAddonUnavailable',
+    };
+  }
+
   // 获取推荐版本
   const recommendedVersion = getRecommendedAddonVersion(effectiveCudaVersion);
 
@@ -397,6 +418,49 @@ export function getEffectivePlatform(): NodeJS.Platform {
     return simConfig.platform;
   }
   return process.platform;
+}
+
+/**
+ * 上游 CUDA/Vulkan 加速包只发布 x64 产物。ARM Linux（含 VOS 的 ARM GPU 镜像）
+ * 使用随镜像构建的 whisper.cpp 插件，不能再下载 x64 包，否则只会加载失败。
+ */
+export function canDownloadCudaAddon(): boolean {
+  const platform = getEffectivePlatform();
+  return platform !== 'darwin' && process.arch === 'x64';
+}
+
+const ELF_MACHINE = { x64: 62, arm64: 183 } as const;
+
+/**
+ * 校验原生插件是否与当前进程架构一致（目前只解析 ELF）。
+ * 历史上 ARM 设备会静默下载到 x64 插件，仅凭文件存在会把不可用的插件当成已安装。
+ */
+export function isNativeBinaryForCurrentArch(filePath: string): boolean {
+  const expected =
+    ELF_MACHINE[process.arch as keyof typeof ELF_MACHINE] ?? null;
+  if (!expected) return true;
+
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(20);
+    const bytesRead = fs.readSync(fd, header, 0, header.length, 0);
+    if (bytesRead < header.length) return true;
+    // 非 ELF（如 macOS Mach-O / Windows PE）不做架构判断
+    if (
+      header[0] !== 0x7f ||
+      header[1] !== 0x45 ||
+      header[2] !== 0x4c ||
+      header[3] !== 0x46
+    ) {
+      return true;
+    }
+    return header.readUInt16LE(18) === expected;
+  } catch {
+    return true;
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+  }
 }
 
 /**
@@ -608,12 +672,21 @@ export function getBuiltinVulkanAddonPath(): string {
   return path.join(getExtraResourcesPath(), 'addons', 'addon.vulkan.node');
 }
 
+/**
+ * 内置 CUDA whisper.cpp addon 路径（ARM GPU 镜像随镜像编译；桌面/CPU 镜像通常不存在）
+ */
+export function getBuiltinCudaAddonPath(): string {
+  return path.join(getExtraResourcesPath(), 'addons', 'addon.cuda.node');
+}
+
 async function probeGpuEnvironment(): Promise<GpuEnvironment> {
   const platform = getEffectivePlatform();
   const gpus = await detectGpus();
   const vulkanRuntime = isPlatformCudaCapable() ? detectVulkanRuntime() : false;
   const builtinVulkanAvailable =
     isPlatformCudaCapable() && fs.existsSync(getBuiltinVulkanAddonPath());
+  const builtinCudaAvailable =
+    isPlatformCudaCapable() && fs.existsSync(getBuiltinCudaAddonPath());
 
   // NVIDIA 详细检测：检测到 N 卡、枚举失败（空列表，nvidia-smi 兜底）或 dev 模拟时执行
   const hasNvidia = gpus.some((g) => g.vendor === 'nvidia');
@@ -628,6 +701,7 @@ async function probeGpuEnvironment(): Promise<GpuEnvironment> {
     gpus,
     vulkanRuntime,
     builtinVulkanAvailable,
+    builtinCudaAvailable,
     nvidia,
   };
   logMessage(

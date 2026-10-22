@@ -8,7 +8,10 @@ import type {
   AddonVariant,
 } from '../../types/addon';
 import { ALL_ADDON_VARIANTS } from '../../types/addon';
-import { getEffectivePlatform } from './cudaUtils';
+import {
+  getEffectivePlatform,
+  isNativeBinaryForCurrentArch,
+} from './cudaUtils';
 
 /**
  * 获取 addons 目录路径
@@ -77,7 +80,15 @@ export function getAddonVersionDir(variant: AddonVariant): string {
 export function isAddonInstalled(version: AddonVariant): boolean {
   const versionDir = getAddonVersionDir(version);
   const addonPath = path.join(versionDir, 'addon.node');
-  return fs.existsSync(addonPath);
+  if (!fs.existsSync(addonPath)) return false;
+  if (!isNativeBinaryForCurrentArch(addonPath)) {
+    logMessage(
+      `Ignoring addon ${version}: addon.node architecture does not match ${process.arch}`,
+      'warning',
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -262,7 +273,7 @@ export function getAddonPath(version: AddonVariant): string | null {
   const versionDir = getAddonVersionDir(version);
   const addonPath = path.join(versionDir, 'addon.node');
 
-  if (fs.existsSync(addonPath)) {
+  if (fs.existsSync(addonPath) && isNativeBinaryForCurrentArch(addonPath)) {
     return addonPath;
   }
 

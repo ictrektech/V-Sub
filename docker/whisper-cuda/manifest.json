@@ -1,0 +1,19 @@
+{
+  "repository": "ictrektech/v-sub-addons",
+  "ref": "whisper-1.9.5-vsub-1",
+  "baseUrl": "https://media.githubusercontent.com/media/ictrektech/v-sub-addons",
+  "profiles": {
+    "thor": {
+      "file": "thor.node",
+      "sha256": "d5e86cf00db790beea2f3b600dc2e63346339498ed3b8be71e4df4e1744d68a6"
+    },
+    "l4t": {
+      "file": "l4t.node",
+      "sha256": "421547ceadb7ad4a7c45ca02c3a725764cbbad045eae1a128664c8e9e9f9a62d"
+    },
+    "arm-cuda": {
+      "file": "arm-cuda.node",
+      "sha256": "c1fdb61a49967323641a202195b5a82d767d5975b2b824d4e1f15fbde1a60f14"
+    }
+  }
+}

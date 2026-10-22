@@ -257,6 +257,8 @@
     "statusRunningGpu": "GPU 加速运行中 · {{backend}}",
     "statusFallback": "已自动切换到 {{backend}}",
     "statusCpu": "CPU 模式",
+    "statusCpuNoDownload": "CPU 模式（此平台无可用下载加速包）",
+    "statusBuiltinCudaReady": "CUDA 加速已内置 · 首次转写自动启用",
     "statusCpuManual": "CPU 模式（手动设置）",
     "statusAutoReady": "已就绪 · 首次转写时将自动选择加速方式",
     "statusGpuOnlyPending": "已设为仅 GPU · 待首次转写加载加速包",
@@ -320,7 +322,9 @@
       "cudaVersionTooOld": "显卡驱动支持的 CUDA 版本过低，无法安装可用加速包",
       "maxCudaUnknown": "未能解析驱动 CUDA 版本，已按最高可用版本推荐",
       "toolkitInstalled": "检测到本机已安装 CUDA Toolkit，推荐轻量版加速包",
-      "toolkitMissing": "未检测到 CUDA Toolkit，推荐完整版加速包（内置运行时）"
+      "toolkitMissing": "未检测到 CUDA Toolkit，推荐完整版加速包（内置运行时）",
+      "cudaAddonUnavailable": "当前平台没有可下载的 whisper.cpp CUDA 加速包；GPU 加速由随构建内置的插件提供",
+      "builtinCuda": "CUDA 加速由镜像内置的 whisper.cpp 插件提供，无需下载加速包"
     },
     "vosSherpaTitle": "sherpa-onnx · VOS 内置运行时",
     "vosSherpaCuda": "{{profile}} · sherpa-onnx {{version}} · 已配置 CUDA 加速，镜像已包含运行库。",

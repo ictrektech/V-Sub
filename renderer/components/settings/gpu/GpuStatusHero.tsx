@@ -103,6 +103,25 @@ const GpuStatusHero: React.FC<GpuStatusHeroProps> = ({
     }
     const fallbackTone: StatusTone = gpuMode === 'auto' ? 'neutral' : 'yellow';
     if (effectiveBackend.backend === 'cpu') {
+      // 内置 CUDA 插件已随镜像提供时，旧的 CPU 结果不代表新镜像会回退
+      if (
+        gpuEnv.builtinCudaAvailable &&
+        (effectiveBackend.failedAttempts?.length ?? 0) === 0
+      ) {
+        return {
+          tone: 'neutral',
+          title: t('gpuAcceleration.statusBuiltinCudaReady'),
+        };
+      }
+      if (
+        isDesktopGpuPlatform &&
+        nvidiaRecommendation?.reasonKey === 'cudaAddonUnavailable'
+      ) {
+        return {
+          tone: 'gray',
+          title: t('gpuAcceleration.statusCpuNoDownload'),
+        };
+      }
       return {
         tone: isDesktopGpuPlatform ? fallbackTone : 'gray',
         title: isDesktopGpuPlatform
@@ -159,6 +178,16 @@ const GpuStatusHero: React.FC<GpuStatusHeroProps> = ({
             {effectiveBackend!.failedAttempts[0].error}
           </div>
         )}
+      {gpuEnv.builtinCudaAvailable && nvidiaRecommendation?.reasonKey === 'builtinCuda' && (
+        <div className="text-xs text-muted-foreground">
+          {t('gpuAcceleration.recommendReason.builtinCuda')}
+        </div>
+      )}
+      {nvidiaRecommendation?.reasonKey === 'cudaAddonUnavailable' && recommendationReason && (
+        <div className="text-xs text-muted-foreground">
+          {recommendationReason}
+        </div>
+      )}
       {!vos && status.tone !== 'green' &&
         isDesktopGpuPlatform &&
         !gpuEnv.vulkanRuntime && (

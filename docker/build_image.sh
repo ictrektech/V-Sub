@@ -14,12 +14,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 case "$sheet" in
-  AMD_with_mxn100) arch=amd64; prefix=amd; profile=amd; gpu=false; sheets=(AMD_with_mxn100) ;;
-  AMD_with_cuda) arch=amd64; prefix=amd_cu128; profile=amd-cuda; gpu=true; sheets=(AMD_with_cuda) ;;
-  ARM_without_cuda) arch=arm64; prefix=arm; profile=arm; gpu=false; sheets=(ARM_without_cuda SOPHON_bm1688) ;;
-  ARM_with_cuda) arch=arm64; prefix=arm_cu130; profile=arm-cuda; gpu=true; sheets=(ARM_with_cuda) ;;
-  l4t) arch=arm64; prefix=l4t; profile=l4t; gpu=true; sheets=(l4t) ;;
-  thor_spark) arch=arm64; prefix=thor; profile=thor; gpu=true; sheets=(thor_spark) ;;
+  AMD_with_mxn100) arch=amd64; prefix=amd; profile=amd; gpu=false; whisper_addon=""; sheets=(AMD_with_mxn100) ;;
+  AMD_with_cuda) arch=amd64; prefix=amd_cu128; profile=amd-cuda; gpu=true; whisper_addon=""; sheets=(AMD_with_cuda) ;;
+  ARM_without_cuda) arch=arm64; prefix=arm; profile=arm; gpu=false; whisper_addon=""; sheets=(ARM_without_cuda SOPHON_bm1688) ;;
+  ARM_with_cuda) arch=arm64; prefix=arm_cu130; profile=arm-cuda; gpu=true; whisper_addon=arm-cuda; sheets=(ARM_with_cuda) ;;
+  l4t) arch=arm64; prefix=l4t; profile=l4t; gpu=true; whisper_addon=l4t; sheets=(l4t) ;;
+  thor_spark) arch=arm64; prefix=thor; profile=thor; gpu=true; whisper_addon=thor; sheets=(thor_spark) ;;
   *) echo "An explicit supported --sheet is required" >&2; exit 1 ;;
 esac
 case "$(uname -m)" in x86_64) actual=amd64 ;; aarch64|arm64) actual=arm64 ;; *) exit 1 ;; esac
@@ -62,12 +62,12 @@ if [[ "$build" == true ]]; then
     exec {sherpa_lock}>"${HOME}/dev/build/v-sub/sherpa-source.lock"
     flock "$sherpa_lock"
     # Reuse V-Voice's published, profile-specific wheel/ORT/CUDA runtime.
-    gpu_base=$(SHEET="$sheet" python3 - <<'PY'
+    gpu_base="${GPU_BASE_IMAGE:-$(SHEET="$sheet" python3 - <<'PY'
 import os, runpy
 module = runpy.run_path('ictrek.app/scripts/package.py')
 print(module['Feishu']().latest_image(os.environ['SHEET'], 'v-voice'))
 PY
-)
+)}"
     if [[ "$arch" == amd64 ]]; then cpu_prefix=amd; else cpu_prefix=arm; fi
     workbench="${WORKBENCH_IMAGE:-${registry}/v-sub:${cpu_prefix}_${date_tag}}"
     source="${SHERPA_SOURCE_DIR:-${HOME}/dev/build/v-sub/sherpa-onnx-1.13.8}"
@@ -87,8 +87,36 @@ PY
     context="${HOME}/dev/build/v-sub/sherpa-source"
     mkdir -p "$context/scripts" "$context/sherpa-onnx"
     tar --dereference --exclude=node_modules --exclude=build -C "$source" -cf - scripts/node-addon-api sherpa-onnx/c-api | tar -C "$context" -xf -
+    # 预编译的 whisper.cpp CUDA addon：按 manifest 从 ictrektech/v-sub-addons 取产物；amd-cuda 用空文件占位
+    whisper_context="${HOME}/dev/build/v-sub/whisper-addon"
+    rm -rf "$whisper_context"
+    mkdir -p "$whisper_context"
+    if [[ -n "$whisper_addon" ]]; then
+      read -r addon_url addon_sha < <(python3 - "$whisper_addon" <<'PY'
+import json, sys
+manifest = json.load(open('docker/whisper-cuda/manifest.json'))
+entry = manifest['profiles'][sys.argv[1]]
+print(manifest['baseUrl'].rstrip('/') + '/' + manifest['ref'] + '/' + entry['file'], entry['sha256'])
+PY
+)
+      addon_cache="${HOME}/dev/build/v-sub/whisper-cuda"
+      addon_path="$addon_cache/${addon_url##*/}"
+      mkdir -p "$addon_cache"
+      if [[ ! -s "$addon_path" || "$(sha256sum "$addon_path" | awk '{print $1}')" != "$addon_sha" ]]; then
+        rm -f "$addon_path"
+        curl -fsSL --connect-timeout 10 --max-time 900 --retry 2 "$addon_url" -o "$addon_path.part" \
+          || { rm -f "$addon_path.part"; echo "Cannot fetch CUDA addon: $addon_url" >&2; exit 1; }
+        mv "$addon_path.part" "$addon_path"
+      fi
+      [[ "$(sha256sum "$addon_path" | awk '{print $1}')" == "$addon_sha" ]] || { echo "CUDA addon checksum mismatch: $addon_path" >&2; exit 1; }
+      [[ "$(head -c 4 "$addon_path")" == $'\x7fELF' ]] || { echo "Not an ELF binary: $addon_path" >&2; exit 1; }
+      cp "$addon_path" "$whisper_context/addon.node"
+    else
+      : > "$whisper_context/addon.node"
+    fi
     docker buildx build --builder default --pull --load --provenance=false --sbom=false \
       --build-context "sherpa_source=${context}" \
+      --build-context "whisper_addon=${whisper_context}" \
       --build-arg "WORKBENCH_IMAGE=$workbench" --build-arg "GPU_BASE_IMAGE=$gpu_base" --build-arg "PROFILE=$profile" \
       -f docker/Dockerfile.gpu -t "$image" .
     flock -u "$sherpa_lock"

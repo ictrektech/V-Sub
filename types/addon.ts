@@ -151,6 +151,8 @@ export interface AddonRecommendation {
   reasonKey?:
     | 'cudaNotSupported'
     | 'cudaVersionTooOld'
+    | 'cudaAddonUnavailable'
+    | 'builtinCuda'
     | 'maxCudaUnknown'
     | 'toolkitInstalled'
     | 'toolkitMissing';
@@ -182,6 +184,8 @@ export interface GpuEnvironment {
   vulkanRuntime: boolean;
   /** 内置 vulkan addon 是否随包分发 */
   builtinVulkanAvailable: boolean;
+  /** 内置 CUDA whisper.cpp addon 是否随镜像分发（ARM GPU 镜像） */
+  builtinCudaAvailable: boolean;
   /** NVIDIA 完整检测结果（未检测到 N 卡时为 null） */
   nvidia: CudaEnvironment | null;
 }

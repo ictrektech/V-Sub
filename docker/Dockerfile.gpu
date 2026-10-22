@@ -33,6 +33,8 @@ PY
 RUN if ! command -v make >/dev/null; then apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*; fi
 RUN cmake -S node-addon -B node-addon/build -DCMAKE_JS_INC=/usr/local/include/node -DCMAKE_BUILD_TYPE=Release \
  && cmake --build node-addon/build -j 4
+# 预编译的 whisper.cpp CUDA addon 由 build_image.sh 按 docker/whisper-cuda/manifest.json 下载（amd-cuda 为空文件）
+COPY --from=whisper_addon /addon.node /build/addon.cuda.node
 
 FROM ${GPU_BASE_IMAGE} AS runtime
 ARG PROFILE
@@ -43,9 +45,11 @@ COPY --from=web /opt/v-sub/ ./
 RUN node -e "require('fs').rmSync('extraResources/sherpa/native/linux-'+process.arch, {recursive:true,force:true})"
 COPY --from=native /build/install/lib/ /tmp/gpu-native/
 COPY --from=native /build/node-addon/build/sherpa-onnx.node /tmp/gpu-native/sherpa-onnx.node
+COPY --from=native /build/addon.cuda.node /tmp/addon.cuda.node
 RUN node -e "require('fs').cpSync('/tmp/gpu-native', 'extraResources/sherpa/native/linux-'+process.arch, {recursive:true,verbatimSymlinks:true}); require('fs').rmSync('/tmp/gpu-native', {recursive:true})" \
  && python3 -c "import sherpa_onnx; assert '+cuda' in sherpa_onnx.__version__" \
  && node -e "const n=require('./extraResources/sherpa/native/linux-'+process.arch+'/sherpa-onnx.node'); const expected={l4t:'1.18.1','amd-cuda':'1.28.2','arm-cuda':'1.27.0',thor:'1.27.0'}[process.env.PROFILE]; if(n.version!=='1.13.8'||n.onnxruntimeVersion!==expected) throw new Error('GPU Node binding version mismatch'); console.log('Verified Node GPU binding:',n.version,n.onnxruntimeVersion)"
+RUN node -e "const fs=require('fs'); const src='/tmp/addon.cuda.node'; const dst='extraResources/addons/addon.cuda.node'; fs.rmSync(dst,{force:true}); if(fs.statSync(src).size===0){console.log('No bundled whisper.cpp CUDA addon for this profile')}else{fs.mkdirSync('extraResources/addons',{recursive:true}); fs.copyFileSync(src,dst); console.log('Bundled whisper.cpp CUDA addon:',fs.statSync(dst).size,'bytes')} fs.rmSync(src)"
 ENV NODE_ENV=production PORT=7090 VSUB_APP_ROOT=/opt/v-sub VSUB_DATA_DIR=/data \
     VSUB_SHERPA_PROVIDER=cuda VSUB_SHERPA_VERSION=1.13.8 VSUB_PROFILE=${PROFILE}
 EXPOSE 7090

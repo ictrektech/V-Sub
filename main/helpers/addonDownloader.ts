@@ -10,7 +10,7 @@ import type {
   DownloadSource,
   AddonVariant,
 } from '../../types/addon';
-import { getEffectivePlatform } from './cudaUtils';
+import { getEffectivePlatform, canDownloadCudaAddon } from './cudaUtils';
 import { getAddonVersionDir } from './addonManager';
 import { createHash } from 'crypto';
 import { resolveReleaseBaseUrl } from './download/sources';
@@ -91,6 +91,11 @@ export function getAddonFileName(
   const platform = getEffectivePlatform();
   if (platform !== 'win32' && platform !== 'linux') {
     throw new Error(`Unsupported platform: ${platform}`);
+  }
+  if (!canDownloadCudaAddon()) {
+    throw new Error(
+      `No prebuilt addon package for ${platform}-${process.arch}; the bundled addon must be used`,
+    );
   }
   const osName = platform === 'win32' ? 'windows' : 'linux';
 

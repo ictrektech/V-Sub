@@ -18,6 +18,8 @@ sample
 .agents/
 # whisper.cpp 原生 addon 按平台体积大且因平台而异，改为按需 fetch（见 scripts/fetch-whisper-addon.mjs），不入库。
 extraResources/addons/*.node
+# GPU 镜像内置的 CUDA addon 发布在 ictrektech/v-sub-addons（见 docker/whisper-cuda/manifest.json），不入库。
+docker/whisper-cuda/*.node
 extraResources/py-base/
 extraResources/sherpa/native/
 .superpowers/

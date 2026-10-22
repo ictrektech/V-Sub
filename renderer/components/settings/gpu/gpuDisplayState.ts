@@ -76,6 +76,18 @@ export function deriveGpuDisplayState(
 
   if (gpuMode === 'gpu-only') {
     if (effective?.backend === 'cpu') {
+      // 内置 CUDA 插件存在且没有失败记录：这条 CPU 结果是旧镜像留下的，
+      // 新镜像的首次转写才会真正加载内置 CUDA 后端
+      if (
+        gpuEnv.builtinCudaAvailable &&
+        (effective.failedAttempts?.length ?? 0) === 0
+      ) {
+        return {
+          ...base,
+          accelerationLabel: '',
+          overviewKind: 'gpuOnlyPending',
+        };
+      }
       return {
         ...base,
         accelerationLabel: 'CPU',
@@ -105,6 +117,16 @@ export function deriveGpuDisplayState(
     };
   }
   if (effective.backend === 'cpu') {
+    if (
+      gpuEnv.builtinCudaAvailable &&
+      (effective.failedAttempts?.length ?? 0) === 0
+    ) {
+      return {
+        ...base,
+        accelerationLabel: '',
+        overviewKind: 'autoPending',
+      };
+    }
     return {
       ...base,
       accelerationLabel: 'CPU',

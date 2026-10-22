@@ -9,6 +9,7 @@ import {
   getEffectivePlatform,
   getGpuEnvironment,
   getBuiltinVulkanAddonPath,
+  getBuiltinCudaAddonPath,
 } from './cudaUtils';
 import {
   getSelectedAddonVersion,
@@ -208,6 +209,17 @@ async function resolveCandidates(ctx: LoadContext): Promise<AddonCandidate[]> {
       variant: 'vulkan',
       source: 'userData',
       path: path.join(getAddonVersionDir('vulkan'), 'addon.node'),
+    });
+  }
+
+  // 内置 CUDA：ARM GPU 镜像随镜像分发（Git LFS 预编译产物），不受下载包架构限制
+  const builtinCuda = getBuiltinCudaAddonPath();
+  if (gpuEnv.nvidia?.gpuSupport.supported && fs.existsSync(builtinCuda)) {
+    candidates.push({
+      backend: 'cuda',
+      variant: null,
+      source: 'builtin',
+      path: builtinCuda,
     });
   }
 
