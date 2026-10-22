@@ -1,9 +1,4 @@
 configs:
-  - name: V_ROUTER_URL
-    type: string
-    title: {zh-CN: 统一模型网关地址, en: Unified model gateway URL}
-    description: {zh-CN: V-Scheduler 提供的 VOS 内统一模型网关；凭据通过账户授权取得。, en: Unified model gateway provided by V-Scheduler; credentials come from VOS account authorization.}
-    default: http://v-scheduler:8080
   - name: VOS_OIDC_USERINFO_URL
     type: string
     title: {zh-CN: VOS 身份校验地址, en: VOS userinfo URL}
@@ -14,13 +9,9 @@ configs:
     title: {zh-CN: 单文件上传上限, en: Maximum upload size}
     description: {zh-CN: 单文件上传字节数上限。, en: Maximum number of bytes per uploaded file.}
     default: 4294967296
-  - name: MODEL_HUB_API_URL
-    type: string
-    title: {zh-CN: Model Hub 地址, en: Model Hub API URL}
-    description: {zh-CN: 本地公共模型由 Model Hub 统一从 ModelScope 下载和管理。, en: Model Hub manages public model downloads from ModelScope.}
-    default: http://v-scheduler:6005
   - name: MODEL_HUB_SHARED_MODELS_PATH
     type: path
     title: {zh-CN: Model Hub 共享模型目录, en: Model Hub shared models directory}
-    description: {zh-CN: 必须与 Model Hub 的共享目录相同，V-Sub 以只读方式加载权重。, en: Must match the Model Hub shared directory; V-Sub reads model weights without modifying them.}
+    description: {zh-CN: V-Scheduler 管理模型的共享根目录；VOS 会自动推荐 V-Scheduler 安装时选择的公共目录，V-Sub 以只读方式加载权重。, en: Shared root directory managed by V-Scheduler. VOS automatically recommends the public directory chosen for V-Scheduler; V-Sub reads model weights without modifying them.}
     default: /data/vos_workspace/model_hub
+    hints: [com.ictrek.model.storage]

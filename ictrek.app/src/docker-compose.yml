@@ -2,9 +2,9 @@ x-vsub-env: &vsub-env
   APP_VERSION: "__APP_VERSION__"
   VSUB_DATA_DIR: /data
   VSUB_SCHEDULER_REQUIRED: "true"
-  MODEL_HUB_API_URL: ${MODEL_HUB_API_URL:-http://v-scheduler:6005}
+  MODEL_HUB_API_URL: http://v-scheduler:6005
   MODEL_HUB_EXPORTS_PATH: /modelhub
-  V_ROUTER_URL: ${V_ROUTER_URL:-http://v-scheduler:8080}
+  V_ROUTER_URL: http://v-scheduler:8080
   VOS_OIDC_USERINFO_URL: ${VOS_OIDC_USERINFO_URL:-http://host.docker.internal:8105/v1000/oauth2/userinfo}
   VSUB_MAX_UPLOAD_BYTES: ${VSUB_MAX_UPLOAD_BYTES:-4294967296}
 
