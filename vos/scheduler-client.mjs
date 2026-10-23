@@ -1,9 +1,8 @@
-import { schedulingOptions } from './scheduling-options.mjs';
+import { schedulingOptions, queueWaitSeconds } from './scheduling-options.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 const headersContext = new AsyncLocalStorage();
 const executionContext = new AsyncLocalStorage();
-let queue = Promise.resolve();
 
 export function schedulingRequired() {
   return process.env.VSUB_WEB === '1' && process.env.VSUB_SCHEDULER_REQUIRED === 'true';
@@ -28,7 +27,7 @@ async function broker(operation, body) {
   let response;
   try {
     response = await fetch(`http://127.0.0.1:7090/internal/scheduler/${namespace}/${operation}`, {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(operation === 'acquire' ? ((body.wait_seconds ?? 30) + 8) * 1000 : 8000),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
@@ -46,8 +45,9 @@ async function execute(options) {
   const model = `v-sub-${namespace.slice(0, 12)}/${options.model}`;
   const headers = headersContext.getStore() || {};
   const gateway = { permit_id: headers['x-vscheduler-permit-id'] || '', execution_token: headers['x-vscheduler-execution-token'] || '', executor_id: headers['x-vscheduler-executor-id'] || '' };
-  const scheduling = schedulingOptions(headers);
-  const receipt = await broker('acquire', { model, execution_settings: options.executionSettings, inputs: options.inputs, gateway, ...(Object.keys(scheduling).length ? { scheduling } : {}), ...(scheduling.force_admission ? { operator_authorization: headers.authorization || '' } : {}) });
+  const scheduling = { priority: 'interactive', ...schedulingOptions(headers) };
+  const waitSeconds = queueWaitSeconds(headers);
+  const receipt = await broker('acquire', { wait_seconds: waitSeconds, model, execution_settings: options.executionSettings, inputs: options.inputs, gateway, ...(Object.keys(scheduling).length ? { scheduling } : {}), ...(scheduling.force_admission ? { operator_authorization: headers.authorization || '' } : {}) });
   let failed = false, checking = false;
   const timer = setInterval(async () => {
     if (checking || failed) return;
@@ -78,7 +78,5 @@ export function scheduledCompute(options) {
   if (!schedulingRequired()) return options.run();
   if (typeof options.run !== 'function' || typeof options.stop !== 'function' || typeof options.model !== 'string' || !options.model) throw new SchedulingError(503, 'Controlled native execution contract required');
   if (executionContext.getStore()) throw new SchedulingError(503, 'Nested local model computation requires an approved joint budget');
-  const active = queue.then(() => execute(options));
-  queue = active.catch(() => {});
-  return active;
+  return execute(options);
 }

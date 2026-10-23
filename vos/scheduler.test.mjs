@@ -21,10 +21,10 @@ async function fixture(context) {
       if (url.startsWith('http://127.0.0.1:19001/')) return Response.json({ data: [{ id: model }] });
       const endpoint = new URL(url).pathname.replace('/scheduler/api/v1', '');
       const body = options.body ? JSON.parse(options.body) : undefined;
-      calls.push({ endpoint, body, key: options.headers?.['Idempotency-Key'] });
+      calls.push({ endpoint, body, key: options.headers?.['Idempotency-Key'], operator: options.headers?.['X-VScheduler-Admin-Authorization'] });
       let data = {};
       if (endpoint === '/executors') data = [{ id: 'app.model', app_id: config.app_id, task_type: 'model.infer', contract_version: '1', upstream_urls: [upstream] }];
-      if (endpoint === '/permits') data = { permit_id: 'permit' };
+      if (endpoint === '/permits/wait') data = { permit_id: 'permit' };
       if (endpoint.endsWith('/verify')) data = { state: 'active', lease_seconds: 30 };
       return Response.json({ code: 'OK', data });
     },
@@ -40,7 +40,7 @@ test('private broker never returns Scheduler credentials and releases only after
   const receipt = await state.broker.acquire(state.namespace, state.workerToken, state.body);
   assert.deepEqual(Object.keys(receipt), ['execution_id']);
   assert.ok(!JSON.stringify(receipt).includes(state.config.token));
-  assert.equal(state.calls.filter(call => call.endpoint === '/permits').length, 1);
+  assert.equal(state.calls.filter(call => call.endpoint === '/permits/wait').length, 1);
   assert.equal(state.calls.find(call => call.endpoint.endsWith('/verify')).body.claim, true);
   await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
   assert.equal(state.calls.at(-1).body.stopped, true);
@@ -63,7 +63,7 @@ test('inherited gateway permit is claimed without a second reservation', async c
   const state = await fixture(context);
   const receipt = await state.broker.acquire(state.namespace, state.workerToken, { ...state.body, gateway: { permit_id: 'gateway-permit', executor_id: 'gateway.model', execution_token: 'proof-'.repeat(8) } });
   await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
-  assert.equal(state.calls.filter(call => call.endpoint === '/permits').length, 0);
+  assert.equal(state.calls.filter(call => call.endpoint === '/permits/wait').length, 0);
   assert.equal(state.calls.filter(call => call.endpoint.endsWith('/release')).length, 0);
   assert.equal(state.calls[0].body.executor_id, 'gateway.model');
 });
@@ -100,7 +100,7 @@ test('worker restart rejects old generation until a matching new binding arrives
   state.worker.generation = 'd'.repeat(32);
   await assert.rejects(state.broker.acquire(state.namespace, state.workerToken, state.body), error => error.status === 503);
   await assert.rejects(state.broker.bind({ ...state.config, binding_revision: 3 }), error => error.status === 503);
-  assert.equal(state.calls.filter(call => call.endpoint === '/permits').length, 0);
+  assert.equal(state.calls.filter(call => call.endpoint === '/permits/wait').length, 0);
   await state.broker.bind({ ...state.config, binding_revision: 3, model_generations: { [state.model]: state.worker.generation } });
   const receipt = await state.broker.acquire(state.namespace, state.workerToken, state.body);
   await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
@@ -114,4 +114,18 @@ test('canonical migration preserves credentials and rejects arbitrary origins', 
   assert.equal(stored.url, migrated.url);
   assert.equal(stored.token, state.config.token);
   await assert.rejects(state.broker.bind({ ...migrated, binding_revision: 4, url: 'http://other/scheduler/api/v1' }), error => error.status === 422);
+});
+
+
+test('native admission waits centrally with bounded deadline and ephemeral operator proof', async context => {
+  const state = await fixture(context);
+  const scheduling = { priority: 'high', force_admission: true };
+  const receipt = await state.broker.acquire(state.namespace, state.workerToken, { ...state.body, scheduling, wait_seconds: 7, operator_authorization: 'Bearer operator-proof' });
+  const request = state.calls.find(call => call.endpoint === '/permits/wait');
+  assert.equal(request.body.wait_seconds, 7);
+  assert.deepEqual(request.body.request.scheduling, scheduling);
+  assert.equal(request.operator, 'Bearer operator-proof');
+  assert.ok(!JSON.stringify(request.body).includes('operator-proof'));
+  await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
+  await assert.rejects(state.broker.acquire(state.namespace, state.workerToken, { ...state.body, wait_seconds: 301 }), error => error.status === 422);
 });

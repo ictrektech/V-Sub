@@ -19,5 +19,12 @@ export function forwardedSchedulingHeaders(headers) {
   for (const [field, header] of Object.entries({ priority: 'x-vscheduler-priority', preemptible: 'x-vscheduler-preemptible', allow_preemption: 'x-vscheduler-allow-preemption', force_admission: 'x-vscheduler-force-admission' })) {
     if (options[field] !== undefined) result[header] = String(options[field]);
   }
+  if (headers['x-vscheduler-queue-wait-seconds'] !== undefined) result['x-vscheduler-queue-wait-seconds'] = String(queueWaitSeconds(headers));
   return result;
+}
+
+export function queueWaitSeconds(headers) {
+  const value = headers['x-vscheduler-queue-wait-seconds'] ?? '30';
+  if (typeof value !== 'string' || !/^[0-9]+$/.test(value) || Number(value) > 300) throw Object.assign(new Error('Queue wait must be an integer from 0 to 300 seconds'), { status: 422 });
+  return Number(value);
 }

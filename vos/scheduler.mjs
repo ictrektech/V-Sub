@@ -42,14 +42,22 @@ export class SchedulerBroker {
     } catch { throw new SchedulerError(503, 'V-Scheduler binding required'); }
   }
 
-  async controller(config, method, endpoint, body, key, operator = '') {
+  async controller(config, method, endpoint, body, key, operator = '', waitSeconds = 30) {
     let response;
+    let timeout = 8000;
+    if (endpoint === '/permits') {
+      if (!Number.isInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 300) throw new SchedulerError(422, 'Invalid admission wait');
+      endpoint = '/permits/wait';
+      body = { request: body, wait_seconds: waitSeconds };
+      timeout = (waitSeconds + 8) * 1000;
+    }
     try {
       response = await this.fetcher(config.url + endpoint, {
-        method, redirect: 'error', signal: AbortSignal.timeout(8000),
+        method, redirect: 'error', signal: AbortSignal.timeout(timeout),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}`, ...(key ? { 'Idempotency-Key': key } : {}), ...(operator ? { 'X-VScheduler-Admin-Authorization': operator } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      if (response.status === 403) throw new SchedulerError(403, 'Scheduler authorization rejected');
       if (response.status === 429) throw new SchedulerError(429, 'Compute resources busy');
       if (!response.ok) throw new Error();
       const value = await response.json();
@@ -145,7 +153,7 @@ export class SchedulerBroker {
       if (!inherited.permit_id || typeof inherited.execution_token !== 'string' || inherited.execution_token.length < 32 || inherited.executor_id !== config.gateway_executors?.[body.model]) throw new SchedulerError(503, 'Invalid gateway admission proof');
       Object.assign(execution, { permit: inherited.permit_id, proof: inherited.execution_token, executor: inherited.executor_id, owned: false });
     } else {
-      const permit = await this.controller(config, 'POST', '/permits', { executor_id: execution.executor, model_id: body.model, upstream_url: upstream, execution_token: execution.proof, ...(body.scheduling ? { scheduling: body.scheduling } : {}) }, id, body.scheduling?.force_admission ? body.operator_authorization || '' : '');
+      const permit = await this.controller(config, 'POST', '/permits', { executor_id: execution.executor, model_id: body.model, upstream_url: upstream, execution_token: execution.proof, ...(body.scheduling ? { scheduling: body.scheduling } : {}) }, id, body.scheduling?.force_admission ? body.operator_authorization || '' : '', body.wait_seconds ?? 30);
       execution.permit = permit.permit_id;
     }
     if (!execution.permit) throw new SchedulerError(503, 'Missing admission receipt');

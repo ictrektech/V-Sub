@@ -54,7 +54,7 @@ test('gateway proof is carried only inside private broker request', async contex
   assert.deepEqual(state.calls[0].body.gateway, { permit_id: 'permit', execution_token: 'proof', executor_id: 'executor' });
 });
 
-test('native calls serialize and cannot nest an unapproved second model', async context => {
+test('native calls cannot nest an unapproved second model', async context => {
   const state = fixture(context);
   await assert.rejects(scheduledCompute({ ...state.options, run: () => scheduledCompute({ ...state.options, model: 'tts/other' }) }), error => error.status === 503);
   assert.equal(state.calls.filter(call => call.operation === 'acquire').length, 1);
@@ -76,4 +76,48 @@ test('root proxy carries only scheduling intent, never copies caller credentials
   const { forwardedSchedulingHeaders } = await import('./scheduling-options.mjs');
   assert.deepEqual(forwardedSchedulingHeaders({ authorization: 'Bearer synthetic', 'x-vscheduler-priority': 'high', 'x-vscheduler-allow-preemption': 'true' }), { 'x-vscheduler-priority': 'high', 'x-vscheduler-allow-preemption': 'true' });
   assert.throws(() => forwardedSchedulingHeaders({ 'x-vscheduler-force-admission': '1' }), error => error.status === 422);
+});
+
+
+test('concurrent requests reach central admission before the active native call finishes', async context => {
+  const state = fixture(context);
+  let finishFirst, admitSecond;
+  const firstGate = new Promise(resolve => { finishFirst = resolve; });
+  const secondGate = new Promise(resolve => { admitSecond = resolve; });
+  let admissions = 0;
+  context.mock.method(globalThis, 'fetch', async (url, options) => {
+    const operation = new URL(url).pathname.split('/').at(-1);
+    if (operation === 'acquire') {
+      admissions++;
+      if (admissions === 2) await secondGate;
+      return Response.json({ execution_id: 'receipt-' + admissions });
+    }
+    return Response.json({ acknowledged: true });
+  });
+  let secondRan = false;
+  const first = scheduledCompute({ ...state.options, run: () => firstGate });
+  const second = withSchedulerHeaders({ 'x-vscheduler-priority': 'high' }, () => scheduledCompute({ ...state.options, run: async () => { secondRan = true; } }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(admissions, 2);
+  assert.equal(secondRan, false);
+  finishFirst('first');
+  await first;
+  admitSecond();
+  await second;
+  assert.equal(secondRan, true);
+});
+
+test('queue wait is bounded, defaults to thirty seconds and crosses the root proxy', async context => {
+  const state = fixture(context);
+  const { forwardedSchedulingHeaders } = await import('./scheduling-options.mjs');
+  await scheduledCompute(state.options);
+  assert.equal(state.calls[0].body.wait_seconds, 30);
+  assert.equal(state.calls[0].body.scheduling.priority, 'interactive');
+  state.calls.length = 0;
+  await withSchedulerHeaders({ 'x-vscheduler-queue-wait-seconds': '0' }, () => scheduledCompute(state.options));
+  assert.equal(state.calls[0].body.wait_seconds, 0);
+  for (const value of ['-1', '301', '1.2', 'bad']) {
+    await assert.rejects(withSchedulerHeaders({ 'x-vscheduler-queue-wait-seconds': value }, () => scheduledCompute(state.options)), error => error.status === 422);
+  }
+  assert.deepEqual(forwardedSchedulingHeaders({ 'x-vscheduler-queue-wait-seconds': '7' }), { 'x-vscheduler-queue-wait-seconds': '7' });
 });
