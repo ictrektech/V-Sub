@@ -40,12 +40,15 @@ async function main() {
       await withNativeModel('qwen/model', () => scheduledAudio(file, {}, async () => true, async () => true, undefined, {}, 'vad/silero'));
       assert.equal(requests[0].body.model, 'v-sub-aaaaaaaaaaaa/vad/silero');
     });
-    await test('取消排队任务不会启动模型或申请许可', async () => {
+    await test('取消已提交的排队任务不启动模型并释放已获许可', async () => {
       requests.length = 0;
       const result = scheduleCancelable('queued', { model: 'qwen/model', executionSettings: {}, inputs: {}, run: async () => assert.fail('started'), stop: async () => true });
       cancelScheduled('queued');
       await assert.rejects(result, (error: any) => error.status === 409);
-      assert.equal(requests.length, 0);
+      // scheduleCancelable submits acquire before returning; cancellation occurs
+      // while that request is pending, so any received permit must be released.
+      assert.deepEqual(requests.map(request => request.operation), ['acquire', 'release']);
+      assert.equal(requests.at(-1).body.stopped, true);
     });
   } finally {
     globalThis.fetch = originalFetch;
