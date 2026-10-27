@@ -40,6 +40,6 @@ async function main() {
     else process.env.MODEL_HUB_EXPORTS_PATH = previous;
     fs.rmSync(directory, { recursive: true, force: true });
   }
-  finish();
+  finish('registered Whisper weights');
 }
 void main();
