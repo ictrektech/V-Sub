@@ -129,3 +129,17 @@ test('native admission waits centrally with bounded deadline and ephemeral opera
   await state.broker.command(state.namespace, state.workerToken, 'release', { ...receipt, stopped: true });
   await assert.rejects(state.broker.acquire(state.namespace, state.workerToken, { ...state.body, wait_seconds: 301 }), error => error.status === 422);
 });
+
+
+test('runtime plan is private, generation-bound, and allocates no resources', async context => {
+  const state = await fixture(context);
+  const plan = await state.broker.command(state.namespace, state.workerToken, 'plan', { model: state.model });
+  assert.deepEqual(plan, { execution_settings: state.settings });
+  assert.equal(state.calls.length, 0);
+  assert.equal(state.broker.executions.size, 0);
+  assert.ok(!JSON.stringify(plan).includes(state.config.token));
+  await assert.rejects(state.broker.command(state.namespace, 'inference-token', 'plan', { model: state.model }), error => error.status === 401);
+  await assert.rejects(state.broker.command(state.other, state.otherToken, 'plan', { model: state.model }), error => error.status === 503);
+  state.worker.generation = 'd'.repeat(32);
+  await assert.rejects(state.broker.command(state.namespace, state.workerToken, 'plan', { model: state.model }), error => error.status === 503);
+});

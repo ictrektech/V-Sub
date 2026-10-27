@@ -436,3 +436,6 @@ MIT — see the [LICENSE](LICENSE) file for details.
 ## Star History
 
 [![Star History Chart](https://star-history.dera.page/svg?repos=buxuku/SmartSub&type=Date)](https://star-history.dera.page/#buxuku/SmartSub&type=Date)
+
+
+For managed VOS execution, the current private calibrated binding selects the Whisper backend. Saved desktop auto / gpu-only / cpu-only preferences are preserved, and tasks show the actual backend. The currently approved tiny-q5_1 path uses CPU. Backend selection does not override language, VAD, input limits or resource budgets; uncalibrated parameters still fail closed.

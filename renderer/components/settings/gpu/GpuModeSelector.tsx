@@ -35,6 +35,7 @@ const GpuModeSelector: React.FC<GpuModeSelectorProps> = ({
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium">{t('gpuAcceleration.modeTitle')}</h4>
+      {process.env.NEXT_PUBLIC_VSUB_WEB && <p className="text-sm text-muted-foreground">{t('gpuAcceleration.managedRuntime')}</p>}
       <div className="grid grid-cols-3 gap-2">
         {modeOptions.map((opt) => (
           <button

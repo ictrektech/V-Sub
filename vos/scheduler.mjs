@@ -186,6 +186,11 @@ export class SchedulerBroker {
   async command(namespace, token, operation, body) {
     if (operation === 'acquire') return this.acquire(namespace, token, body);
     await this.worker(namespace, token);
+    if (operation === 'plan') {
+      const config = await this.configuration();
+      await this.model(config, namespace, body.model);
+      return { execution_settings: structuredClone(config.model_execution_settings[body.model]) };
+    }
     const execution = this.executions.get(body.execution_id);
     if (!execution || execution.namespace !== namespace) throw new SchedulerError(404, 'Execution not found');
     if (operation === 'verify') {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scheduledCompute, withSchedulerHeaders } from './scheduler-client.mjs';
+import { scheduledCompute, scheduledRuntime, withSchedulerHeaders } from './scheduler-client.mjs';
 
 function fixture(context) {
   const previous = { ...process.env };
@@ -120,4 +120,12 @@ test('queue wait is bounded, defaults to thirty seconds and crosses the root pro
     await assert.rejects(withSchedulerHeaders({ 'x-vscheduler-queue-wait-seconds': value }, () => scheduledCompute(state.options)), error => error.status === 422);
   }
   assert.deepEqual(forwardedSchedulingHeaders({ 'x-vscheduler-queue-wait-seconds': '7' }), { 'x-vscheduler-queue-wait-seconds': '7' });
+});
+
+
+test('runtime planning qualifies the model and never acquires or releases a permit', async context => {
+  const state = fixture(context);
+  await scheduledRuntime('builtin/tiny');
+  assert.deepEqual(state.calls.map(call => call.operation), ['plan']);
+  assert.equal(state.calls[0].body.model, 'v-sub-aaaaaaaaaaaa/builtin/tiny');
 });

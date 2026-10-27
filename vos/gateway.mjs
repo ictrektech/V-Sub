@@ -94,7 +94,7 @@ const server = http.createServer(async (req, res) => {
     let pathname = url.pathname;
     if (pathname === base || pathname.startsWith(base + '/')) pathname = pathname.slice(base.length) || '/';
     if (pathname === '/health') { json(res, 200, { ok: true, version: process.env.APP_VERSION || 'development', workers: workers.size }); return; }
-    const schedulerCommand = /^\/internal\/scheduler\/([a-f0-9]{64})\/(acquire|verify|release)$/.exec(pathname);
+    const schedulerCommand = /^\/internal\/scheduler\/([a-f0-9]{64})\/(plan|acquire|verify|release)$/.exec(pathname);
     if (schedulerCommand && req.method === 'POST') {
       if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) throw new SchedulerError(403, 'Loopback worker connection required');
       const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1] || '';

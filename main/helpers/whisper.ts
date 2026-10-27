@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
-import { isAppleSilicon, isWin32 } from './utils';
+import { isAppleSilicon, isWin32, getExtraResourcesPath } from './utils';
 import { BrowserWindow, DownloadItem } from 'electron';
 import decompress from 'decompress';
 import fs from 'fs-extra';
@@ -10,6 +10,8 @@ import { resolveModelRoot } from './storagePaths';
 import { getEffectivePlatform } from './cudaUtils';
 import { loadBestAddon } from './addonLoader';
 import { getHfHost } from './config/downloadConfig';
+import { scheduledRuntime, schedulingRequired } from '../../vos/scheduler-client.mjs';
+import { managedWhisperContext } from '../../vos/whisper-runtime.mjs';
 import type { GpuMode, MacAccelMode } from '../../types/addon';
 
 export const getPath = (key?: string) => {
@@ -274,10 +276,15 @@ export const hasEncoderModel = (model) => {
  * 加载适合当前系统的 Whisper Addon
  *
  * 实际决策与降级链见 addonLoader.resolveCandidates；
- * 此处仅负责组装 LoadContext（gpuMode + CoreML 可用性）。
+ * VOS 托管执行先按私有校准绑定选择后端；桌面端按本地偏好组装 LoadContext。
  * macAccelMode=metal 时显式跳过 CoreML 候选（用户在引擎管理中选择）。
  */
 export async function loadWhisperAddon(model: string) {
+  if (schedulingRequired()) {
+    const plan = await scheduledRuntime(`builtin/${model}`);
+    const addon = path.join(getExtraResourcesPath(), 'addons', 'addon.node');
+    return loadBestAddon(managedWhisperContext(plan, process.env.VSUB_PROFILE, addon));
+  }
   const settings = store.get('settings');
   const gpuMode: GpuMode = settings?.gpuMode || 'auto';
   const macAccelMode: MacAccelMode = settings?.macAccelMode || 'auto';

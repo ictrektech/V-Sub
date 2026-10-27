@@ -331,7 +331,8 @@
     "vosSherpaCpu": "{{profile}} · sherpa-onnx {{version}} · 使用 CPU 运行时。",
     "vosSherpaScope": "实际后端由所选引擎和模型决定，部分模型会使用 CPU；Jetson L4T 的 Paraformer 使用 CPU。这里的配置不代表 whisper.cpp 已启用 CUDA。",
     "vosWhisperHint": "这是 whisper.cpp 的可选 CUDA 插件，独立于 sherpa-onnx。完整版自带运行库；未找到 nvcc 不代表缺少 CUDA 运行库，也不代表需要升级宿主机驱动。",
-    "vosWhisperInstall": "安装 whisper.cpp CUDA {{version}} 插件（{{edition}} · {{sizeHint}}）"
+    "vosWhisperInstall": "安装 whisper.cpp CUDA {{version}} 插件（{{edition}} · {{sizeHint}}）",
+    "managedRuntime": "在 VOS 中，由 V-Scheduler 选择已校准的执行后端。以下桌面加速偏好仍会保留，任务中会显示实际使用的后端。"
   },
   "configImportExport": "配置导入导出",
   "configImportExportDescription": "导出或导入应用配置（包括服务商配置和系统设置）。导出的文件经过加密保护，需要设置密码。",

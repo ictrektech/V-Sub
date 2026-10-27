@@ -80,3 +80,10 @@ export function scheduledCompute(options) {
   if (executionContext.getStore()) throw new SchedulingError(503, 'Nested local model computation requires an approved joint budget');
   return execute(options);
 }
+
+// A metadata-only lookup: the broker authenticates this worker and its current
+// binding generation; it returns no controller credentials and acquires no permit.
+export function scheduledRuntime(model) {
+  const namespace = process.env.VSUB_NAMESPACE || '';
+  return broker('plan', { model: `v-sub-${namespace.slice(0, 12)}/${model}` });
+}
