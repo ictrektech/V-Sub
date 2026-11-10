@@ -521,3 +521,7 @@ Native executors acquire admission with POST /scheduler/api/v1/permits/wait and 
 
 
 VOS 托管执行时，由当前私有绑定的校准信息选择 Whisper 后端，不直接用桌面 GPU 偏好选择未经预算批准的 addon。原有 auto / gpu-only / cpu-only 偏好保留；任务显示实际后端。当前已批准的 tiny-q5_1 路径使用 CPU。后端选择不修改语言、VAD、输入限制或资源预算，未校准的参数仍会拒绝。
+
+## VOS API 文档
+
+侧栏 API 文档区分 VOS 会话/HTTP、Scheduler 应用身份绑定和独立桌面 MCP/CLI。[中文完整参考](ictrek.app/docs/api-reference.zh.md)、[English reference](ictrek.app/docs/api-reference.en.md)。覆盖原生111项操作输入、任务状态/取消、厂商凭据增量更新和权限，以及资源校准/任务优先级。V-Sub 没有个人访问 Key CRUD 接口，外部推理使用 V-Scheduler。本轮只更新源码，随下次发版进入安装界面。

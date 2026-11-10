@@ -439,3 +439,7 @@ MIT — see the [LICENSE](LICENSE) file for details.
 
 
 For managed VOS execution, the current private calibrated binding selects the Whisper backend. Saved desktop auto / gpu-only / cpu-only preferences are preserved, and tasks show the actual backend. The currently approved tiny-q5_1 path uses CPU. Backend selection does not override language, VAD, input limits or resource budgets; uncalibrated parameters still fail closed.
+
+## VOS API documentation
+
+The sidebar API guide distinguishes VOS session/HTTP, Scheduler application-identity binding and standalone desktop MCP/CLI. [English reference](ictrek.app/docs/api-reference.en.md), [Chinese reference](ictrek.app/docs/api-reference.zh.md). It covers111 native operation inputs, task states/cancellation, provider credential patches and permissions, calibration and task priority. V-Sub exposes no personal access-Key CRUD API; external inference uses V-Scheduler. Documentation ships in the next app release; no image is published in this task.
