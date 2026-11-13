@@ -19,3 +19,5 @@ CPU profile 使用 CPU 本地引擎；AMD CUDA、ARM CUDA、Jetson/L4T 和 Thor 
 GPU 页面分别显示 sherpa-onnx 内置运行时与 whisper.cpp 可选插件。未检测到 nvcc 不表示缺少 CUDA 运行库，也不意味着必须更新宿主机驱动。
 
 权限修复：V-Sub 只读挂载 `<MODEL_HUB_SHARED_MODELS_PATH>/export`，不再挂载整个受限存储根目录。模型下载完成后若无法读取，会明确报告目录或权限错误，不再强制重复下载。更新安装包后复用 Model Hub 中已下载的权重。
+
+在使用 Traefik v3 的 VOS 上，从浏览器直接打开应用根地址会跳转到 VOS 应用页面。嵌入页面和 API 请求沿用原有路由。

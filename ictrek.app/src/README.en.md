@@ -19,3 +19,5 @@ The GPU panel separates bundled sherpa-onnx runtimes from optional whisper.cpp p
 Model Hub permission fix: V-Sub mounts only `<MODEL_HUB_SHARED_MODELS_PATH>/export` read-only, rather than the restricted storage root. A completed model with inaccessible or missing files is reported as a mount/permission error and never triggers a full forced re-download. Existing downloaded weights are reused after updating the package.
 
 Local ASR/TTS models are refreshed every 30 seconds and discovered privately by V-Scheduler using the current VOS identity. V-Sub no longer sends registration, lease renewal or unregister requests. Missing services or inactive user runtimes are normal empty discovery states.
+
+On VOS with Traefik v3, opening the app root directly in a browser redirects to its VOS page. Embedded pages and API requests use their existing routes.

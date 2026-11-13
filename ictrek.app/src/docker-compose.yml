@@ -22,7 +22,7 @@ x-vsub: &vsub
       aliases: [v-sub-backend]
   labels:
     - "traefik.enable=true"
-    - 'traefik.http.routers.v-sub-top-open.rule=(Path(`/app/com.ictrek.v-sub`) || Path(`/app/com.ictrek.v-sub/`)) && HeadersRegexp(`Sec-Fetch-Dest`, `document`)'
+    - 'traefik.http.routers.v-sub-top-open.rule=(Path(`/app/com.ictrek.v-sub`) || Path(`/app/com.ictrek.v-sub/`)) && HeaderRegexp(`Sec-Fetch-Dest`, `document`)'
     - "traefik.http.routers.v-sub-top-open.priority=200"
     - "traefik.http.routers.v-sub-top-open.service=v-sub-app"
     - "traefik.http.routers.v-sub-top-open.middlewares=v-sub-top-open-redirect"
