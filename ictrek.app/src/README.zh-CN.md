@@ -1,5 +1,7 @@
 # V-Sub __APP_VERSION__
 
+在 VOS 的「应用管理 → 应用抽屉 → V-Sub」分组中打开「API 文档」。
+
 字幕转写、翻译、校对、配音、烧录与音视频导出。保留 SmartSub 的工作流和原有模型管理，改为 VOS 浏览器入口。
 
 从 VOS 打开应用后自动通过 OIDC Fastpath 登录，自动读取 V-Scheduler 的 ASR/TTS 模型，包括 V-Voice 和已配置的标准云端接口。云服务凭据统一在 V-Scheduler 管理；此应用不要求重复填写。V-Voice 的音色按所选模型读取。标准云 TTS 不提供音色列表时使用标准 OpenAI 音色，可在原服务配置中调整。

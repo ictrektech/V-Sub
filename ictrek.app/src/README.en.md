@@ -1,5 +1,7 @@
 # V-Sub __APP_VERSION__
 
+In VOS, open **Application Management → App Drawer → V-Sub → API documentation**.
+
 Subtitle transcription, translation, proofreading, dubbing, composition and media export in a VOS browser app, preserving SmartSub's workflows and local engine management.
 
 VOS OIDC Fastpath verifies the account. V-Scheduler automatically supplies available ASR/TTS models, including V-Voice and configured standard cloud audio endpoints. V-Voice voices are fetched per model; standard cloud endpoints without a voice catalog use the standard OpenAI voice list.

@@ -1,3 +1,4 @@
+router-type: structured
 routers:
   - id: v-sub
     kind: page
@@ -15,5 +16,4 @@ routers:
     order: 221
     iframe-src: /app/com.ictrek.v-sub/api-guide.html
     keep-alive: true
-    entry-point: true
     embed: true
